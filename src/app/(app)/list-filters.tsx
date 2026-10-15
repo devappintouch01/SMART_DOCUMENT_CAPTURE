@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ExtractionStatus } from "@/domain/types";
+import { Select } from "@/components/select";
 
 const STATUS_LABELS: Record<ExtractionStatus, string> = {
   queued: "รอคิว",
@@ -53,32 +54,21 @@ export function ListFilters({ documentTypes }: { documentTypes: { id: string; na
         aria-label="ค้นหาชื่อไฟล์"
         className={`${field} w-56`}
       />
-      <select
+      <Select
         value={params.get("type") ?? ""}
-        onChange={(event) => update({ type: event.target.value })}
-        aria-label="ประเภทเอกสาร"
-        className={field}
-      >
-        <option value="">ทุกประเภท</option>
-        {documentTypes.map((type) => (
-          <option key={type.id} value={type.id}>
-            {type.name}
-          </option>
-        ))}
-      </select>
-      <select
+        onChange={(type) => update({ type })}
+        ariaLabel="ประเภทเอกสาร"
+        options={[{ value: "", label: "ทุกประเภท" }, ...documentTypes.map((t) => ({ value: t.id, label: t.name }))]}
+      />
+      <Select
         value={params.get("status") ?? ""}
-        onChange={(event) => update({ status: event.target.value })}
-        aria-label="สถานะ"
-        className={field}
-      >
-        <option value="">ทุกสถานะ</option>
-        {Object.entries(STATUS_LABELS).map(([value, label]) => (
-          <option key={value} value={value}>
-            {label}
-          </option>
-        ))}
-      </select>
+        onChange={(status) => update({ status })}
+        ariaLabel="สถานะ"
+        options={[
+          { value: "", label: "ทุกสถานะ" },
+          ...Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })),
+        ]}
+      />
       {active && (
         <button
           type="button"

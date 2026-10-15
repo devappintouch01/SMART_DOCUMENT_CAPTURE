@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { isHeic, MAX_FILES_PER_BATCH } from "@/domain/upload-limits";
+import { Select } from "@/components/select";
 import { prepareFile, uploadToSignedUrl } from "@/lib/browser-upload";
 import { registerUploads, requestUploads } from "./actions";
 
@@ -142,22 +143,18 @@ export function UploadForm({ documentTypes }: Props) {
 
   return (
     <div className="mt-6 space-y-5">
-      <label className="block max-w-sm text-sm">
-        ประเภทเอกสาร
-        <select
+      <div className="max-w-sm text-sm">
+        <span className="mb-1 block">ประเภทเอกสาร</span>
+        <Select
           value={documentTypeId}
-          onChange={(event) => setDocumentTypeId(event.target.value)}
+          onChange={setDocumentTypeId}
           disabled={busy}
-          className="select-lg mt-1 w-full border border-black/15 px-3 py-2"
-        >
-          <option value="auto">ให้ AI ตรวจให้</option>
-          {documentTypes.map((type) => (
-            <option key={type.id} value={type.id}>
-              {type.name}
-            </option>
-          ))}
-        </select>
-      </label>
+          size="lg"
+          block
+          ariaLabel="ประเภทเอกสาร"
+          options={[{ value: "auto", label: "ให้ AI ตรวจให้" }, ...documentTypes.map((t) => ({ value: t.id, label: t.name }))]}
+        />
+      </div>
 
       <div
         onDragOver={(event) => {

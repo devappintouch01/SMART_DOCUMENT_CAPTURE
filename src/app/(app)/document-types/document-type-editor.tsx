@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FIELD_KINDS, validateDocumentTypeDraft } from "@/domain/document-type-rules";
 import type { FieldKind, FieldScope } from "@/domain/types";
 import type { FieldInput } from "@/server/ports";
+import { Select } from "@/components/select";
 
 type Row = FieldInput & { key: string };
 
@@ -120,18 +121,14 @@ export function DocumentTypeEditor({
                 aria-label="ชื่อช่อง"
                 className={inputClass}
               />
-              <select
+              <Select
                 value={row.kind}
-                onChange={(event) => update(row.key, { kind: event.target.value as FieldKind })}
-                aria-label="ชนิดข้อมูล"
-                className={inputClass}
-              >
-                {FIELD_KINDS.map((k) => (
-                  <option key={k.kind} value={k.kind}>
-                    {k.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(kind) => update(row.key, { kind: kind as FieldKind })}
+                ariaLabel="ชนิดข้อมูล"
+                size="sm"
+                block
+                options={FIELD_KINDS.map((k) => ({ value: k.kind, label: k.label }))}
+              />
               <input
                 value={row.description}
                 onChange={(event) => update(row.key, { description: event.target.value })}

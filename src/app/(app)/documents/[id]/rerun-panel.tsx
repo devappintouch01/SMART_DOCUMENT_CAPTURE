@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { rerunExtraction } from "./actions";
+import { Select } from "@/components/select";
 
 type Props = {
   documentId: string;
@@ -27,25 +28,21 @@ export function RerunPanel({ documentId, currentTypeId, documentTypes }: Props) 
   return (
     <div className="rounded-xl border border-black/10 bg-white p-4 text-sm">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex-1">
-          <span className="text-neutral-500">ประเภทเอกสาร</span>
-          <select
+        <div className="flex-1">
+          <span className="mb-1 block text-neutral-500">ประเภทเอกสาร</span>
+          <Select
             value={typeId}
-            onChange={(event) => {
-              setTypeId(event.target.value);
+            onChange={(next) => {
+              setTypeId(next);
               setConfirming(false);
             }}
             disabled={pending}
-            className="select-lg mt-1 w-full border border-black/15 px-3 py-2"
-          >
-            <option value="auto">ให้ AI ตรวจให้</option>
-            {documentTypes.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            size="lg"
+            block
+            ariaLabel="ประเภทเอกสาร"
+            options={[{ value: "auto", label: "ให้ AI ตรวจให้" }, ...documentTypes.map((t) => ({ value: t.id, label: t.name }))]}
+          />
+        </div>
         {!confirming && (
           <button
             type="button"
