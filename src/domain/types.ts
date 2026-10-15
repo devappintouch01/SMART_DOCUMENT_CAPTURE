@@ -55,3 +55,6 @@ export type DocumentFilter = {
   // Case-insensitive part of the file name.
   search?: string;
 };
+
+// A Document Type with how many Documents use it, for the Document Types page.
+export type DocumentTypeSummary = DocumentType & { documentCount: number };

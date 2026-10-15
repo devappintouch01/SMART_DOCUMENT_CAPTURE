@@ -3,6 +3,7 @@ import type {
   AiReader,
   ClassificationOutput,
   DocumentFile,
+  DocumentTypeProposal,
   ExtractionOutput,
 } from "../ports";
 
@@ -21,6 +22,22 @@ export class FakeAiReader implements AiReader {
   // Highest number of extract calls running at the same moment.
   peakConcurrentExtracts = 0;
   private running = 0;
+
+  private proposeResponses: (DocumentTypeProposal | Error)[] = [];
+  proposeCalls: DocumentFile[] = [];
+
+  willPropose(...responses: (DocumentTypeProposal | Error)[]): this {
+    this.proposeResponses.push(...responses);
+    return this;
+  }
+
+  async proposeDocumentType(file: DocumentFile): Promise<DocumentTypeProposal> {
+    this.proposeCalls.push(file);
+    const next = this.proposeResponses.shift();
+    if (next === undefined) throw new Error("FakeAiReader: no scripted propose response");
+    if (next instanceof Error) throw next;
+    return next;
+  }
 
   willClassify(...responses: (ClassificationOutput | Error)[]): this {
     this.classifyResponses.push(...responses);

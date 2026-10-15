@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "db:seed": "node --env-file=.env.local scripts/seed.mjs",
-    "try:extract": "tsx --conditions=react-server --env-file=.env.local scripts/try-extract.mts"
+    "try:extract": "tsx --conditions=react-server --env-file=.env.local scripts/try-extract.mts",
+    "try:propose": "tsx --conditions=react-server --env-file=.env.local scripts/try-propose.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.134.0",

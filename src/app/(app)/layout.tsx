@@ -19,6 +19,9 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
               <Link href="/upload" className={navLink}>
                 อัปโหลด
               </Link>
+              <Link href="/document-types" className={navLink}>
+                ประเภทเอกสาร
+              </Link>
             </nav>
           </div>
           <form action={logout}>

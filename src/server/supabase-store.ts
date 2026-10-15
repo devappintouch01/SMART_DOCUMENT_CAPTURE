@@ -8,7 +8,7 @@ import type {
   FieldKind,
   FieldScope,
 } from "@/domain/types";
-import type { ClaimedDocument, NewDocument, Store, UploadTarget } from "./ports";
+import type { ClaimedDocument, FieldInput, NewDocument, Store, UploadTarget } from "./ports";
 
 const BUCKET = "documents";
 const SIGNED_URL_SECONDS = 60 * 60;
@@ -174,6 +174,44 @@ export class SupabaseStore implements Store {
     const { data, error } = await this.db.storage.from(BUCKET).download(storagePath);
     if (error) throw error;
     return new Uint8Array(await data.arrayBuffer());
+  }
+
+  async createDocumentType(input: { name: string; fields: FieldInput[] }): Promise<string> {
+    const { data, error } = await this.db
+      .from("document_types")
+      .insert({ name: input.name, is_seed: false })
+      .select("id")
+      .single();
+    if (error) throw error;
+    const id = data.id as string;
+
+    const { error: fieldsError } = await this.db.from("fields").insert(
+      input.fields.map((f, position) => ({
+        document_type_id: id,
+        scope: f.scope,
+        name: f.name,
+        kind: f.kind,
+        description: f.description || null,
+        position,
+      })),
+    );
+    if (fieldsError) {
+      // No transaction through the API: undo the half-created type.
+      await this.db.from("document_types").delete().eq("id", id);
+      throw fieldsError;
+    }
+    return id;
+  }
+
+  async countDocumentsByType(): Promise<Record<string, number>> {
+    const { data, error } = await this.db.from("documents").select("document_type_id");
+    if (error) throw error;
+    const counts: Record<string, number> = {};
+    for (const row of data) {
+      const typeId = row.document_type_id as string | null;
+      if (typeId) counts[typeId] = (counts[typeId] ?? 0) + 1;
+    }
+    return counts;
   }
 
   async deleteDocuments(ids: string[]): Promise<number> {

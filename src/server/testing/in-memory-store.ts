@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { countOpenFlags, type ExtractedData } from "@/domain/extracted-data";
 import type { DocumentSummary, DocumentType, ExtractionStatus } from "@/domain/types";
-import type { ClaimedDocument, NewDocument, Store, UploadTarget } from "../ports";
+import type { ClaimedDocument, FieldInput, NewDocument, Store, UploadTarget } from "../ports";
 
 export type StoredDocument = {
   id: string;
@@ -102,6 +102,32 @@ export class InMemoryStore implements Store {
     const bytes = this.files.get(storagePath);
     if (!bytes) throw new Error(`no file at ${storagePath}`);
     return bytes;
+  }
+
+  async createDocumentType(input: { name: string; fields: FieldInput[] }): Promise<string> {
+    const id = randomUUID();
+    this.documentTypes.push({
+      id,
+      name: input.name,
+      isSeed: false,
+      fields: input.fields.map((f, position) => ({
+        id: randomUUID(),
+        scope: f.scope,
+        name: f.name,
+        kind: f.kind,
+        description: f.description || null,
+        position,
+      })),
+    });
+    return id;
+  }
+
+  async countDocumentsByType(): Promise<Record<string, number>> {
+    const counts: Record<string, number> = {};
+    for (const d of this.documents) {
+      if (d.documentTypeId) counts[d.documentTypeId] = (counts[d.documentTypeId] ?? 0) + 1;
+    }
+    return counts;
   }
 
   async deleteDocuments(ids: string[]): Promise<number> {

@@ -1,12 +1,13 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { RawValue } from "@/domain/extracted-data";
-import type { DocumentType, Field, FieldKind } from "@/domain/types";
+import type { DocumentType, Field, FieldKind, FieldScope } from "@/domain/types";
 import {
   AiReaderError,
   type AiReader,
   type ClassificationOutput,
   type DocumentFile,
+  type DocumentTypeProposal,
   type ExtractionOutput,
 } from "./ports";
 
@@ -111,8 +112,17 @@ function documentBlock(file: DocumentFile): Anthropic.Beta.BetaContentBlockParam
   };
 }
 
-function toReaderError(error: unknown): AiReaderError {
+export function toReaderError(error: unknown): AiReaderError {
   if (error instanceof AiReaderError) return error;
+  // The API reports an empty balance as a plain 400, which would otherwise read
+  // as "bad file". Retrying cannot help until credit is added.
+  if (error instanceof Anthropic.BadRequestError && /credit balance/i.test(error.message)) {
+    return new AiReaderError(
+      false,
+      "เครดิต Anthropic หมด เติมเงินที่ console.anthropic.com แล้วกดลองใหม่",
+      { cause: error },
+    );
+  }
   if (
     error instanceof Anthropic.RateLimitError ||
     error instanceof Anthropic.InternalServerError ||
@@ -151,6 +161,57 @@ function parseJson<T>(text: string): T {
   }
 }
 
+const PROPOSE_SYSTEM_PROMPT = `You help set up a new Document Type for reading Thai business documents. You are given one example document. Propose a name and the fields worth extracting.
+
+Rules:
+- name: the kind of document in Thai as people call it, for example "ใบวางบิล" or "ใบสั่งซื้อ". Not the vendor or the file name.
+- Header fields are values that appear once on the document (document number, dates, parties, tax IDs, totals, notes). Line item fields are the columns of the item table, one value per row. If the document has no item table, give no line item fields.
+- Use the field names as printed on the document, in Thai where the document is Thai. Keep them short.
+- kind is one of: text (words, codes, ids, phone numbers, tax ids), number (quantities), date, amount (money). Tax ids and phone numbers are text, not number.
+- description: one short Thai sentence saying exactly which value to read, especially where the document shows several similar values (for example which of the totals). Mention the unit or format when it matters.
+- Aim for the fields an accountant would actually copy into a spreadsheet: usually 6-15 header fields and 3-8 line item fields. Do not invent fields that are not on the document.`;
+
+const proposeSchema = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    header_fields: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          kind: { type: "string", enum: ["text", "number", "date", "amount"] },
+          description: { type: "string" },
+        },
+        required: ["name", "kind", "description"],
+        additionalProperties: false,
+      },
+    },
+    line_item_fields: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          kind: { type: "string", enum: ["text", "number", "date", "amount"] },
+          description: { type: "string" },
+        },
+        required: ["name", "kind", "description"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["name", "header_fields", "line_item_fields"],
+  additionalProperties: false,
+};
+
+type ProposalOutput = {
+  name: string;
+  header_fields: { name: string; kind: FieldKind; description: string }[];
+  line_item_fields: { name: string; kind: FieldKind; description: string }[];
+};
+
 export class ClaudeAiReader implements AiReader {
   constructor(
     private readonly client = new Anthropic(),
@@ -158,6 +219,43 @@ export class ClaudeAiReader implements AiReader {
     private readonly classificationModel = process.env.AI_CLASSIFICATION_MODEL ||
       DEFAULT_CLASSIFICATION_MODEL,
   ) {}
+
+  async proposeDocumentType(file: DocumentFile): Promise<DocumentTypeProposal> {
+    let response: Anthropic.Beta.BetaMessage;
+    try {
+      response = await this.client.beta.messages.create({
+        model: this.model,
+        max_tokens: 8000,
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+        output_config: { effort: "medium", format: { type: "json_schema", schema: proposeSchema } },
+        system: PROPOSE_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: [documentBlock(file), { type: "text", text: "Propose the Document Type for this document." }],
+          },
+        ],
+      });
+    } catch (error) {
+      throw toReaderError(error);
+    }
+
+    const output = parseJson<ProposalOutput>(responseText(response));
+    const toField = (scope: FieldScope) => (f: ProposalOutput["header_fields"][number]) => ({
+      scope,
+      name: f.name,
+      kind: f.kind,
+      description: f.description,
+    });
+    return {
+      name: output.name,
+      fields: [
+        ...(output.header_fields ?? []).map(toField("header")),
+        ...(output.line_item_fields ?? []).map(toField("line_item")),
+      ],
+    };
+  }
 
   async classify(file: DocumentFile, documentTypes: DocumentType[]): Promise<ClassificationOutput> {
     // Positional keys keep the enum short and free of names the schema

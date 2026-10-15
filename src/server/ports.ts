@@ -1,5 +1,11 @@
 import type { ExtractedData, RawValue } from "@/domain/extracted-data";
-import type { DocumentDetail, DocumentSummary, DocumentType } from "@/domain/types";
+import type {
+  DocumentDetail,
+  DocumentSummary,
+  DocumentType,
+  FieldKind,
+  FieldScope,
+} from "@/domain/types";
 
 export type UploadTarget = {
   storagePath: string;
@@ -35,6 +41,11 @@ export interface Store {
   // Short-lived URLs for viewing stored files, keyed by storage path.
   createSignedUrls(storagePaths: string[]): Promise<Record<string, string>>;
   downloadFile(storagePath: string): Promise<Uint8Array>;
+  // Creates a Document Type with its Fields (positions follow the list order)
+  // and returns its id.
+  createDocumentType(input: { name: string; fields: FieldInput[] }): Promise<string>;
+  // Number of Documents per Document Type id.
+  countDocumentsByType(): Promise<Record<string, number>>;
   // Removes the Documents and their stored files; returns how many Documents
   // existed.
   deleteDocuments(ids: string[]): Promise<number>;
@@ -83,6 +94,20 @@ export class AiReaderError extends Error {
   }
 }
 
+// A Field as the user edits it; position comes from the order of the list.
+export type FieldInput = {
+  scope: FieldScope;
+  name: string;
+  kind: FieldKind;
+  description: string;
+};
+
+export type DocumentTypeProposal = {
+  // Thai, e.g. "ใบวางบิล".
+  name: string;
+  fields: FieldInput[];
+};
+
 export type ClassificationOutput = {
   // null when no Document Type fits.
   documentTypeId: string | null;
@@ -93,5 +118,7 @@ export type ClassificationOutput = {
 // The Document service reaches the AI only through this port.
 export interface AiReader {
   classify(file: DocumentFile, documentTypes: DocumentType[]): Promise<ClassificationOutput>;
+  // Suggests a name and Fields for a Document Type from one example document.
+  proposeDocumentType(file: DocumentFile): Promise<DocumentTypeProposal>;
   extract(file: DocumentFile, documentType: DocumentType): Promise<ExtractionOutput>;
 }

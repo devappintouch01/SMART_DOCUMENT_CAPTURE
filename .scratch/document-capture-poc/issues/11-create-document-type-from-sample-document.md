@@ -4,10 +4,12 @@
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Claude adapter implements `proposeDocumentType`
-- [ ] The Document Types page lists each type with its Field and Document counts
-- [ ] The Field editor supports name, Field Kind, Field Description and scope (header or line item), plus reorder, add and remove
-- [ ] Saving creates the Document Type and registers the Sample Document as a Queued Document of that type
-- [ ] Service tests cover the proposal flow and the Sample Document becoming the first Document
+- [x] Claude adapter implements `proposeDocumentType`
+- [x] The Document Types page lists each type with its Field and Document counts
+- [x] The Field editor supports name, Field Kind, Field Description and scope (header or line item), plus reorder, add and remove
+- [x] Saving creates the Document Type and registers the Sample Document as a Queued Document of that type
+- [x] Service tests cover the proposal flow and the Sample Document becoming the first Document
+
+**Note:** the first Extraction with a created type (ใบวางบิล, 20 fields) could not be verified because the Anthropic credit ran out right after saving. Top up, press ลองใหม่ on billing-note.pdf, and confirm it reaches Done.

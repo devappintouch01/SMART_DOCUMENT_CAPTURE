@@ -11,9 +11,12 @@ import type {
   DocumentFilter,
   DocumentListItem,
   DocumentType,
+  DocumentTypeSummary,
   FieldScope,
 } from "@/domain/types";
+import { validateDocumentTypeDraft } from "@/domain/document-type-rules";
 import {
+  ACCEPTED_MIME_TYPES,
   extensionFor,
   validateBatchSize,
   validateFileMeta,
@@ -24,6 +27,8 @@ import {
   AiReaderError,
   type AiReader,
   type ClaimedDocument,
+  type DocumentTypeProposal,
+  type FieldInput,
   type Store,
   type UploadTarget,
 } from "./ports";
@@ -57,6 +62,27 @@ export const NO_MATCHING_TYPE = "ไม่พบประเภทเอกส�
 // What the upload page sends when the user picks "ให้ AI ตรวจให้".
 export const AUTO_CLASSIFY = "auto";
 const ABANDONED_FAILURE = "อ่านเอกสารนานผิดปกติ กรุณากดลองใหม่";
+
+// The AI's draft, tidied so the editor never starts with blank, duplicate or
+// out-of-range fields.
+function cleanProposal(proposal: DocumentTypeProposal): DocumentTypeProposal {
+  const kinds = ["text", "number", "date", "amount"];
+  const seen = new Set<string>();
+  const fields: FieldInput[] = [];
+  for (const field of proposal.fields) {
+    const name = field.name.trim().slice(0, 60);
+    const key = `${field.scope}:${name.toLowerCase()}`;
+    if (name === "" || seen.has(key)) continue;
+    seen.add(key);
+    fields.push({
+      scope: field.scope === "line_item" ? "line_item" : "header",
+      name,
+      kind: kinds.includes(field.kind) ? field.kind : "text",
+      description: field.description.trim().slice(0, 300),
+    });
+  }
+  return { name: proposal.name.trim().slice(0, 80), fields: fields.slice(0, 60) };
+}
 
 function toRows(
   documentType: DocumentType,
@@ -247,6 +273,74 @@ export function createDocumentService(deps: {
 
     async listDocumentTypes(): Promise<DocumentType[]> {
       return store.listDocumentTypes();
+    },
+
+    async listDocumentTypesWithCounts(): Promise<DocumentTypeSummary[]> {
+      const [types, counts] = await Promise.all([store.listDocumentTypes(), store.countDocumentsByType()]);
+      return types.map((type) => ({ ...type, documentCount: counts[type.id] ?? 0 }));
+    },
+
+    // A short-lived URL for viewing a stored file, or null if it cannot be made.
+    async fileUrl(storagePath: string): Promise<string | null> {
+      return (await store.createSignedUrls([storagePath]))[storagePath] ?? null;
+    },
+
+    // Asks the AI to draft a name and Fields from a Sample Document the browser
+    // has already uploaded. Nothing is saved; the user edits the draft first.
+    async proposeDocumentType(input: { storagePath: string; mimeType: string }): Promise<DocumentTypeProposal> {
+      if (!(ACCEPTED_MIME_TYPES as readonly string[]).includes(input.mimeType)) {
+        throw new UserFacingError("รองรับเฉพาะไฟล์ PDF, JPG, PNG และ WebP");
+      }
+      try {
+        const bytes = await store.downloadFile(input.storagePath);
+        return cleanProposal(await ai.proposeDocumentType({ bytes, mimeType: input.mimeType }));
+      } catch (error) {
+        if (error instanceof AiReaderError) throw new UserFacingError(error.userMessage);
+        console.error(error);
+        throw new UserFacingError("ให้ AI ร่างช่องจากเอกสารตัวอย่างไม่สำเร็จ ลองใหม่อีกครั้ง");
+      }
+    },
+
+    // Saves a new Document Type. When it came from a Sample Document, that file
+    // becomes the first Document of the type and starts its Extraction (the
+    // caller triggers processQueue).
+    async createDocumentType(input: {
+      name: string;
+      fields: FieldInput[];
+      sample: RegisteredFile | null;
+    }): Promise<{ documentTypeId: string; documentId: string | null }> {
+      const existing = await store.listDocumentTypes();
+      const problems = validateDocumentTypeDraft(
+        input.name,
+        input.fields,
+        existing.map((t) => t.name),
+      );
+      if (problems.length > 0) throw new UserFacingError(problems.join("\n"));
+
+      const documentTypeId = await store.createDocumentType({
+        name: input.name.trim(),
+        fields: input.fields.map((f) => ({
+          scope: f.scope,
+          name: f.name.trim(),
+          kind: f.kind,
+          description: f.description.trim(),
+        })),
+      });
+
+      let documentId: string | null = null;
+      if (input.sample) {
+        [documentId] = await store.insertDocuments([
+          {
+            fileName: input.sample.fileName,
+            storagePath: input.sample.storagePath,
+            mimeType: input.sample.mimeType,
+            pageCount: input.sample.pageCount,
+            requestedDocumentTypeId: documentTypeId,
+            documentTypeId,
+          },
+        ]);
+      }
+      return { documentTypeId, documentId };
     },
 
     async listDocuments(filter: DocumentFilter = {}): Promise<DocumentListItem[]> {
