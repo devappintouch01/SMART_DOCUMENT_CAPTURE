@@ -14,6 +14,8 @@ export type StoredDocument = {
   status: ExtractionStatus;
   failureReason: string | null;
   attemptCount: number;
+  nextAttemptAt: Date | null;
+  extractingSince: Date | null;
   extractedData: ExtractedData | null;
   uploadedAt: Date;
 };
@@ -37,6 +39,8 @@ export class InMemoryStore implements Store {
       status: "queued",
       failureReason: null,
       attemptCount: 0,
+      nextAttemptAt: null,
+      extractingSince: null,
       extractedData: null,
       uploadedAt: this.now(),
       ...overrides,
@@ -104,12 +108,14 @@ export class InMemoryStore implements Store {
     const extracting = this.documents.filter((d) => d.status === "extracting").length;
     const slots = maxConcurrent - extracting;
     if (slots <= 0) return [];
+    const now = this.now();
     const claimed = this.documents
-      .filter((d) => d.status === "queued")
+      .filter((d) => d.status === "queued" && (!d.nextAttemptAt || d.nextAttemptAt <= now))
       .sort((a, b) => a.uploadedAt.getTime() - b.uploadedAt.getTime())
       .slice(0, slots);
     for (const d of claimed) {
       d.status = "extracting";
+      d.extractingSince = now;
       d.attemptCount += 1;
     }
     return claimed.map((d) => ({
@@ -127,6 +133,7 @@ export class InMemoryStore implements Store {
     d.status = "done";
     d.extractedData = structuredClone(data);
     d.failureReason = null;
+    d.extractingSince = null;
   }
 
   async failExtraction(id: string, reason: string): Promise<void> {
@@ -134,5 +141,30 @@ export class InMemoryStore implements Store {
     if (!d) return;
     d.status = "failed";
     d.failureReason = reason;
+    d.extractingSince = null;
+  }
+
+  async requeueExtraction(id: string, nextAttemptAt: Date): Promise<void> {
+    const d = this.documents.find((doc) => doc.id === id && doc.status === "extracting");
+    if (!d) return;
+    d.status = "queued";
+    d.nextAttemptAt = nextAttemptAt;
+    d.extractingSince = null;
+  }
+
+  async listStaleExtractions(cutoff: Date) {
+    return this.documents
+      .filter((d) => d.status === "extracting" && d.extractingSince && d.extractingSince < cutoff)
+      .map((d) => ({ id: d.id, attemptCount: d.attemptCount }));
+  }
+
+  async resetFailedExtraction(id: string): Promise<boolean> {
+    const d = this.documents.find((doc) => doc.id === id && doc.status === "failed");
+    if (!d) return false;
+    d.status = "queued";
+    d.attemptCount = 0;
+    d.failureReason = null;
+    d.nextAttemptAt = null;
+    return true;
   }
 }

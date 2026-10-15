@@ -204,6 +204,40 @@ export class SupabaseStore implements Store {
     if (error) throw error;
   }
 
+  async requeueExtraction(id: string, nextAttemptAt: Date): Promise<void> {
+    const { error } = await this.db
+      .from("documents")
+      .update({
+        status: "queued",
+        next_attempt_at: nextAttemptAt.toISOString(),
+        extracting_since: null,
+      })
+      .eq("id", id)
+      .eq("status", "extracting");
+    if (error) throw error;
+  }
+
+  async listStaleExtractions(cutoff: Date) {
+    const { data, error } = await this.db
+      .from("documents")
+      .select("id, attempt_count")
+      .eq("status", "extracting")
+      .lt("extracting_since", cutoff.toISOString());
+    if (error) throw error;
+    return data.map((row) => ({ id: row.id as string, attemptCount: row.attempt_count as number }));
+  }
+
+  async resetFailedExtraction(id: string): Promise<boolean> {
+    const { data, error } = await this.db
+      .from("documents")
+      .update({ status: "queued", attempt_count: 0, failure_reason: null, next_attempt_at: null })
+      .eq("id", id)
+      .eq("status", "failed")
+      .select("id");
+    if (error) throw error;
+    return data.length > 0;
+  }
+
   async failExtraction(id: string, reason: string): Promise<void> {
     const { error } = await this.db
       .from("documents")

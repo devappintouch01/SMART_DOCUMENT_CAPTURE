@@ -40,7 +40,16 @@ export type RegisteredFile = {
 
 export const DEFAULT_EXTRACTION_CONCURRENCY = 4;
 
+// One first try plus three retries for transient failures (spec: Background
+// processing). Index n is the wait after the (n+1)th failed attempt.
+export const RETRY_DELAYS_MS = [10_000, 30_000, 90_000];
+export const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
+// An Extraction still running after this long is treated as abandoned (its
+// serverless invocation was cut off) and goes back to the queue.
+export const ABANDONED_AFTER_MS = 5 * 60_000;
+
 const GENERIC_FAILURE = "เกิดข้อผิดพลาดระหว่างอ่านเอกสาร";
+const ABANDONED_FAILURE = "อ่านเอกสารนานผิดปกติ กรุณากดลองใหม่";
 
 function toRows(
   documentType: DocumentType,
@@ -64,9 +73,29 @@ export function createDocumentService(deps: {
   store: Store;
   ai: AiReader;
   concurrency?: number;
+  now?: () => Date;
 }) {
   const { store, ai } = deps;
   const concurrency = deps.concurrency ?? DEFAULT_EXTRACTION_CONCURRENCY;
+  const now = deps.now ?? (() => new Date());
+
+  // A failed attempt either waits and goes back to the queue or, once the
+  // attempts are used up, ends the Extraction as Failed.
+  async function retryOrFail(id: string, attemptCount: number, reason: string) {
+    if (attemptCount >= MAX_ATTEMPTS) {
+      await store.failExtraction(id, reason);
+      return;
+    }
+    const delay = RETRY_DELAYS_MS[Math.min(attemptCount, RETRY_DELAYS_MS.length) - 1];
+    await store.requeueExtraction(id, new Date(now().getTime() + delay));
+  }
+
+  async function reclaimAbandoned() {
+    const cutoff = new Date(now().getTime() - ABANDONED_AFTER_MS);
+    for (const stale of await store.listStaleExtractions(cutoff)) {
+      await retryOrFail(stale.id, stale.attemptCount, ABANDONED_FAILURE);
+    }
+  }
 
   async function runExtraction(document: ClaimedDocument, types: DocumentType[]) {
     const documentType = types.find((t) => t.id === document.documentTypeId);
@@ -88,14 +117,23 @@ export function createDocumentService(deps: {
       };
       await store.completeExtraction(document.id, data);
     } catch (error) {
-      // Retrying transient failures arrives with ticket 04.
       if (!(error instanceof AiReaderError)) console.error(error);
       const reason = error instanceof AiReaderError ? error.userMessage : GENERIC_FAILURE;
-      await store.failExtraction(document.id, reason);
+      // Unknown errors (storage hiccups, network) are worth another try.
+      const retryable = error instanceof AiReaderError ? error.retryable : true;
+      if (retryable) await retryOrFail(document.id, document.attemptCount, reason);
+      else await store.failExtraction(document.id, reason);
     }
   }
 
   return {
+    // Puts a Failed Extraction back in the queue with a fresh set of attempts.
+    // The caller then triggers processQueue in the background.
+    async retryExtraction(id: string): Promise<void> {
+      const requeued = await store.resetFailedExtraction(id);
+      if (!requeued) throw new UserFacingError("ลองใหม่ได้เฉพาะเอกสารที่อ่านไม่สำเร็จ");
+    },
+
     async listDocumentTypes(): Promise<DocumentType[]> {
       return store.listDocumentTypes();
     },
@@ -174,6 +212,7 @@ export function createDocumentService(deps: {
     // Runs Extractions until nothing claimable is left. Safe to call from
     // several places at once: the Store hands each Document to one caller.
     async processQueue(): Promise<void> {
+      await reclaimAbandoned();
       let types: DocumentType[] | null = null;
       for (;;) {
         const claimed = await store.claimQueuedDocuments(concurrency);

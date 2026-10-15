@@ -74,6 +74,9 @@ export default async function ResultListPage() {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{document.fileName}</p>
                 <p className="text-neutral-500">{document.documentTypeName ?? "ยังไม่ระบุประเภท"}</p>
+                {document.status === "failed" && document.failureReason && (
+                  <p className="truncate text-red-700">{document.failureReason}</p>
+                )}
               </div>
               <StatusBadge status={document.status} reason={document.failureReason} />
               {document.openReviewFlagCount > 0 && (

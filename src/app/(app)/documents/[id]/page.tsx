@@ -8,9 +8,12 @@ import { getDocumentService } from "@/server/container";
 import { AutoRefresh } from "../../auto-refresh";
 import { StatusBadge } from "../../status-badge";
 import { OriginalViewer } from "./original-viewer";
+import { RetryButton } from "./retry-button";
 
 export const metadata: Metadata = { title: "รายละเอียดเอกสาร" };
 export const dynamic = "force-dynamic";
+// The retry action starts an Extraction in the background.
+export const maxDuration = 300;
 
 function Value({ field, entry }: { field: Field; entry: ExtractedValue | undefined }) {
   const shown = formatValue(field.kind, entry?.value ?? null);
@@ -56,9 +59,10 @@ export default async function DocumentDetailPage({ params }: PageProps<"/documen
 
         <div className="space-y-6">
           {document.status === "failed" && (
-            <p className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
               อ่านเอกสารไม่สำเร็จ: {document.failureReason}
-            </p>
+              <RetryButton documentId={document.id} />
+            </div>
           )}
           {working && (
             <p className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">

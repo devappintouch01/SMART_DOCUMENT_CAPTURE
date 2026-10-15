@@ -40,6 +40,12 @@ export interface Store {
   claimQueuedDocuments(maxConcurrent: number): Promise<ClaimedDocument[]>;
   completeExtraction(id: string, data: ExtractedData): Promise<void>;
   failExtraction(id: string, reason: string): Promise<void>;
+  // Extracting → Queued, claimable again from nextAttemptAt.
+  requeueExtraction(id: string, nextAttemptAt: Date): Promise<void>;
+  // Extractions that have been running since before the cutoff.
+  listStaleExtractions(cutoff: Date): Promise<{ id: string; attemptCount: number }[]>;
+  // Failed → Queued with the attempt count reset; false if it was not Failed.
+  resetFailedExtraction(id: string): Promise<boolean>;
 }
 
 export type DocumentFile = { bytes: Uint8Array; mimeType: string };
