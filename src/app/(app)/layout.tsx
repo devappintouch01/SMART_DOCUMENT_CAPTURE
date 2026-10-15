@@ -19,7 +19,14 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
               รีเซ็ต demo
             </Link>
             <form action={logout}>
-              <button type="submit" className="text-sm whitespace-nowrap text-neutral-500 hover:text-foreground">
+              <button
+                type="submit"
+                className="flex items-center gap-1.5 text-sm whitespace-nowrap text-primary hover:text-primary-hover"
+              >
+                <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M8 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M12.5 6.5L16 10l-3.5 3.5M16 10H8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
                 ออกจากระบบ
               </button>
             </form>
