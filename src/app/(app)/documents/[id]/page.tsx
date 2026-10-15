@@ -30,6 +30,29 @@ export default async function DocumentDetailPage({ params }: PageProps<"/documen
   const data = document.extractedData;
   const working = document.status === "queued" || document.status === "extracting";
 
+  const notices = (
+    <>
+      {!working && (
+        <RerunPanel
+          documentId={document.id}
+          currentTypeId={document.documentTypeId}
+          documentTypes={documentTypes.map((t) => ({ id: t.id, name: t.name }))}
+        />
+      )}
+      {document.status === "failed" && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          อ่านเอกสารไม่สำเร็จ: {document.failureReason}
+          <RetryButton documentId={document.id} />
+        </div>
+      )}
+      {working && (
+        <p className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+          AI กำลังอ่านเอกสาร หน้านี้จะอัปเดตเองเมื่อเสร็จ
+        </p>
+      )}
+    </>
+  );
+
   return (
     <section>
       <AutoRefresh active={working} />
@@ -48,41 +71,25 @@ export default async function DocumentDetailPage({ params }: PageProps<"/documen
         {document.pageCount ? ` · ${document.pageCount} หน้า` : ""}
       </p>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <OriginalViewer url={document.fileUrl} mimeType={document.mimeType} />
-
-        <div className="space-y-6">
-          {!working && (
-            <RerunPanel
-              documentId={document.id}
-              currentTypeId={document.documentTypeId}
-              documentTypes={documentTypes.map((t) => ({ id: t.id, name: t.name }))}
-            />
-          )}
-          {document.status === "failed" && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-              อ่านเอกสารไม่สำเร็จ: {document.failureReason}
-              <RetryButton documentId={document.id} />
-            </div>
-          )}
-          {working && (
-            <p className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-              AI กำลังอ่านเอกสาร หน้านี้จะอัปเดตเองเมื่อเสร็จ
-            </p>
-          )}
-
-          {data && (
-            <ResultEditor
-              // A fresh editor whenever the stored data changes (save, confirm, re-read).
-              key={JSON.stringify(data)}
-              documentId={document.id}
-              headerFields={headerFields}
-              lineFields={lineFields}
-              data={data}
-            />
-          )}
+      {data ? (
+        <div className="mt-6">
+          <ResultEditor
+            // A fresh editor whenever the stored data changes (save, confirm, re-read).
+            key={JSON.stringify(data)}
+            documentId={document.id}
+            headerFields={headerFields}
+            lineFields={lineFields}
+            data={data}
+            viewer={<OriginalViewer url={document.fileUrl} mimeType={document.mimeType} />}
+            notices={notices}
+          />
         </div>
-      </div>
+      ) : (
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <OriginalViewer url={document.fileUrl} mimeType={document.mimeType} />
+          <div className="space-y-6">{notices}</div>
+        </div>
+      )}
     </section>
   );
 }

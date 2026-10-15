@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import type { CorrectionInput, FlagTarget } from "@/domain/corrections";
 import type { ExtractedData, ExtractedValue } from "@/domain/extracted-data";
 import { formatDateBE, parseThaiDate } from "@/domain/format";
@@ -15,6 +15,10 @@ type Props = {
   headerFields: Field[];
   lineFields: Field[];
   data: ExtractedData;
+  // The original file, shown beside the form.
+  viewer: ReactNode;
+  // Re-read panel and status messages, shown above the form.
+  notices: ReactNode;
 };
 
 type Row = { sourceIndex: number | null; key: string; values: Record<string, string> };
@@ -32,6 +36,22 @@ function toStored(field: Field, text: string): { value: string; problem: string 
   return iso
     ? { value: iso, problem: null }
     : { value: text, problem: `${field.name}: ใส่วันที่เป็น วว/ดด/ปปปป (พ.ศ.) เช่น 15/10/2569` };
+}
+
+// Line Item columns get room by what they hold: long text needs the most, short
+// text and dates a medium amount, numbers and money the least.
+function columnWidth(kind: Field["kind"]): string {
+  switch (kind) {
+    case "long_text":
+      return "min-w-[22rem]";
+    case "text":
+      return "min-w-44";
+    case "date":
+      return "min-w-36";
+    default:
+      // Numbers and money stay narrow so the text columns take the rest.
+      return "w-36 min-w-28";
+  }
 }
 
 const inputBase =
@@ -136,7 +156,7 @@ function Cell({
 
 // Header Fields as a form and Line Items as an editable table (spec: result
 // detail). Saving stores every changed value as a Correction.
-export function ResultEditor({ documentId, headerFields, lineFields, data }: Props) {
+export function ResultEditor({ documentId, headerFields, lineFields, data, viewer, notices }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -201,6 +221,12 @@ export function ResultEditor({ documentId, headerFields, lineFields, data }: Pro
 
   return (
     <div className="space-y-6">
+      {/* Top: the original beside the form. The Line Items table follows below
+          at full width, because it has too many columns for half a page. */}
+      <div className="grid gap-6 lg:grid-cols-2">
+      {viewer}
+      <div className="min-w-0 space-y-6">
+      {notices}
       <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-black/10 bg-white px-4 py-3 text-sm shadow-sm">
         <button
           type="button"
@@ -290,6 +316,9 @@ export function ResultEditor({ documentId, headerFields, lineFields, data }: Pro
         </div>
       </div>
 
+      </div>
+      </div>
+
       {lineFields.length > 0 && (
         <div className="rounded-xl border border-black/10 bg-white">
           <h2 className="border-b border-black/10 px-4 py-3 font-medium">รายการ ({rows.length})</h2>
@@ -309,7 +338,7 @@ export function ResultEditor({ documentId, headerFields, lineFields, data }: Pro
                 {rows.map((row) => (
                   <tr key={row.key} className="align-top">
                     {lineFields.map((field) => (
-                      <td key={field.id} className="min-w-28 px-2 py-2">
+                      <td key={field.id} className={`${columnWidth(field.kind)} px-2 py-2`}>
                         <Cell
                           field={field}
                           value={row.values[field.id] ?? ""}
