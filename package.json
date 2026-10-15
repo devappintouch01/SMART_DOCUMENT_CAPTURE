@@ -13,6 +13,7 @@
     "db:seed": "node --env-file=.env.local scripts/seed.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.134.0",
     "@supabase/supabase-js": "^2.117.3",
     "next": "16.4.1",
     "pdf-lib": "^1.17.1",

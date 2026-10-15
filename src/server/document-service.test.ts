@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { SEED_DOCUMENT_TYPES } from "@/domain/seeds";
-import type { DocumentSummary } from "@/domain/types";
 import { MAX_FILE_BYTES, type FileMeta } from "@/domain/upload-limits";
 import { createDocumentService, UserFacingError } from "./document-service";
 import { FakeAiReader } from "./testing/fake-ai-reader";
@@ -25,21 +24,6 @@ function file(overrides: Partial<FileMeta> = {}): FileMeta {
   };
 }
 
-function document(overrides: Partial<DocumentSummary>): DocumentSummary {
-  return {
-    id: "doc",
-    fileName: "inv_001.pdf",
-    mimeType: "application/pdf",
-    storagePath: "doc.pdf",
-    documentTypeId: null,
-    documentTypeName: null,
-    status: "queued",
-    failureReason: null,
-    openReviewFlagCount: 0,
-    uploadedAt: new Date("2026-10-15T08:00:00Z"),
-    ...overrides,
-  };
-}
 
 describe("listDocuments", () => {
   it("returns an empty list when nothing has been uploaded", async () => {
@@ -49,10 +33,8 @@ describe("listDocuments", () => {
 
   it("lists the newest upload first", async () => {
     const { store, service } = setup();
-    store.documents = [
-      document({ id: "old", uploadedAt: new Date("2026-10-14T08:00:00Z") }),
-      document({ id: "new", uploadedAt: new Date("2026-10-15T08:00:00Z") }),
-    ];
+    store.addDocument({ id: "old", uploadedAt: new Date("2026-10-14T08:00:00Z") });
+    store.addDocument({ id: "new", uploadedAt: new Date("2026-10-15T08:00:00Z") });
 
     const ids = (await service.listDocuments()).map((d) => d.id);
 
@@ -61,10 +43,8 @@ describe("listDocuments", () => {
 
   it("gives images a preview URL and PDFs none", async () => {
     const { store, service } = setup();
-    store.documents = [
-      document({ id: "pdf", mimeType: "application/pdf", storagePath: "a.pdf" }),
-      document({ id: "img", mimeType: "image/jpeg", storagePath: "b.jpg" }),
-    ];
+    store.addDocument({ id: "pdf", mimeType: "application/pdf", storagePath: "a.pdf" });
+    store.addDocument({ id: "img", mimeType: "image/jpeg", storagePath: "b.jpg" });
 
     const byId = Object.fromEntries((await service.listDocuments()).map((d) => [d.id, d]));
 

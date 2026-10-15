@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { DocumentListItem } from "@/domain/types";
 import { getDocumentService } from "@/server/container";
+import { AutoRefresh } from "./auto-refresh";
 import { StatusBadge } from "./status-badge";
 
 export const metadata: Metadata = { title: "รายการเอกสาร" };
@@ -39,9 +40,11 @@ function Thumbnail({ document }: { document: DocumentListItem }) {
 
 export default async function ResultListPage() {
   const documents = await getDocumentService().listDocuments();
+  const working = documents.some((d) => d.status === "queued" || d.status === "extracting");
 
   return (
     <section>
+      <AutoRefresh active={working} />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">รายการเอกสาร</h1>
         <Link
@@ -62,16 +65,26 @@ export default async function ResultListPage() {
       ) : (
         <ul className="mt-6 divide-y divide-black/10 rounded-xl border border-black/10 bg-white">
           {documents.map((document) => (
-            <li key={document.id} className="flex items-center gap-4 px-4 py-3 text-sm">
+            <li key={document.id}>
+              <Link
+                href={`/documents/${document.id}`}
+                className="flex items-center gap-4 px-4 py-3 text-sm hover:bg-neutral-50"
+              >
               <Thumbnail document={document} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{document.fileName}</p>
                 <p className="text-neutral-500">{document.documentTypeName ?? "ยังไม่ระบุประเภท"}</p>
               </div>
               <StatusBadge status={document.status} reason={document.failureReason} />
-              <span className="hidden w-32 text-right text-neutral-500 sm:block">
+              {document.openReviewFlagCount > 0 && (
+                <span className="text-xs text-amber-700" title="ช่องที่ควรตรวจ">
+                  ⚠ {document.openReviewFlagCount}
+                </span>
+              )}
+              <span className="hidden w-36 text-right text-neutral-500 sm:block">
                 {uploadedAtFormat.format(document.uploadedAt)}
               </span>
+              </Link>
             </li>
           ))}
         </ul>

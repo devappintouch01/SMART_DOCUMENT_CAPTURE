@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import type { FileMeta } from "@/domain/upload-limits";
 import { getDocumentService } from "@/server/container";
 import { UserFacingError, type RegisteredFile } from "@/server/document-service";
@@ -31,7 +32,12 @@ export async function registerUploads(input: {
   files: RegisteredFile[];
 }): Promise<RegisterUploadsResult> {
   try {
-    return { ok: true, ...(await getDocumentService().registerUploads(input)) };
+    const service = getDocumentService();
+    const result = await service.registerUploads(input);
+    // Start reading right away; the result list's polling picks up anything
+    // this run doesn't finish.
+    after(() => service.processQueue());
+    return { ok: true, ...result };
   } catch (error) {
     return { ok: false, error: describe(error) };
   }

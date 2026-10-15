@@ -38,3 +38,12 @@ export type DocumentSummary = {
 // A row on the result list: the summary plus a short-lived image URL for the
 // thumbnail (PDFs have none).
 export type DocumentListItem = DocumentSummary & { previewUrl: string | null };
+
+// Everything the result detail page shows for one Document.
+export type DocumentDetail = DocumentSummary & {
+  pageCount: number | null;
+  documentType: DocumentType | null;
+  extractedData: import("./extracted-data").ExtractedData | null;
+  // Short-lived URL for viewing the original file.
+  fileUrl: string | null;
+};

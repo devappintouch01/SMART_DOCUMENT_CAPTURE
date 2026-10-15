@@ -1,14 +1,21 @@
 import "server-only";
-import { createDocumentService, type DocumentService } from "./document-service";
-import type { AiReader } from "./ports";
+import { ClaudeAiReader } from "./claude-ai-reader";
+import {
+  createDocumentService,
+  DEFAULT_EXTRACTION_CONCURRENCY,
+  type DocumentService,
+} from "./document-service";
 import { SupabaseStore } from "./supabase-store";
 
 let service: DocumentService | undefined;
 
 // Wires the Document service to the real adapters.
 export function getDocumentService(): DocumentService {
-  // The Claude adapter replaces this placeholder in ticket 03.
-  const ai: AiReader = {};
-  service ??= createDocumentService({ store: SupabaseStore.fromEnv(), ai });
+  service ??= createDocumentService({
+    store: SupabaseStore.fromEnv(),
+    ai: new ClaudeAiReader(),
+    concurrency:
+      Number(process.env.EXTRACTION_CONCURRENCY) || DEFAULT_EXTRACTION_CONCURRENCY,
+  });
   return service;
 }

@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { countOpenFlags, type ExtractedData } from "@/domain/extracted-data";
 import type {
   DocumentSummary,
   DocumentType,
@@ -7,21 +8,34 @@ import type {
   FieldKind,
   FieldScope,
 } from "@/domain/types";
-import type { NewDocument, Store, UploadTarget } from "./ports";
+import type { ClaimedDocument, NewDocument, Store, UploadTarget } from "./ports";
 
 const BUCKET = "documents";
 const SIGNED_URL_SECONDS = 60 * 60;
+
+const DOCUMENT_COLUMNS =
+  "id, file_name, mime_type, storage_path, page_count, document_type_id, status, failure_reason, extracted_data, uploaded_at, document_types!documents_document_type_id_fkey(name)";
 
 type DocumentRow = {
   id: string;
   file_name: string;
   mime_type: string;
   storage_path: string;
+  page_count: number | null;
   document_type_id: string | null;
   status: ExtractionStatus;
   failure_reason: string | null;
+  extracted_data: ExtractedData | null;
   uploaded_at: string;
   document_types: { name: string } | null;
+};
+
+type ClaimedRow = {
+  id: string;
+  storage_path: string;
+  mime_type: string;
+  document_type_id: string | null;
+  attempt_count: number;
 };
 
 type DocumentTypeRow = {
@@ -37,6 +51,21 @@ type DocumentTypeRow = {
     position: number;
   }[];
 };
+
+function toSummary(row: DocumentRow): DocumentSummary {
+  return {
+    id: row.id,
+    fileName: row.file_name,
+    mimeType: row.mime_type,
+    storagePath: row.storage_path,
+    documentTypeId: row.document_type_id,
+    documentTypeName: row.document_types?.name ?? null,
+    status: row.status,
+    failureReason: row.failure_reason,
+    openReviewFlagCount: countOpenFlags(row.extracted_data),
+    uploadedAt: new Date(row.uploaded_at),
+  };
+}
 
 export class SupabaseStore implements Store {
   constructor(private readonly db: SupabaseClient) {}
@@ -80,26 +109,26 @@ export class SupabaseStore implements Store {
   async listDocuments(): Promise<DocumentSummary[]> {
     const { data, error } = await this.db
       .from("documents")
-      .select(
-        "id, file_name, mime_type, storage_path, document_type_id, status, failure_reason, uploaded_at, document_types!documents_document_type_id_fkey(name)",
-      )
+      .select(DOCUMENT_COLUMNS)
       .order("uploaded_at", { ascending: false })
       .returns<DocumentRow[]>();
     if (error) throw error;
+    return data.map(toSummary);
+  }
 
-    return data.map((row) => ({
-      id: row.id,
-      fileName: row.file_name,
-      mimeType: row.mime_type,
-      storagePath: row.storage_path,
-      documentTypeId: row.document_type_id,
-      documentTypeName: row.document_types?.name ?? null,
-      status: row.status,
-      failureReason: row.failure_reason,
-      // Review Flags arrive with ticket 06.
-      openReviewFlagCount: 0,
-      uploadedAt: new Date(row.uploaded_at),
-    }));
+  async getDocument(id: string) {
+    const { data, error } = await this.db
+      .from("documents")
+      .select(DOCUMENT_COLUMNS)
+      .eq("id", id)
+      .maybeSingle<DocumentRow>();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      ...toSummary(data),
+      pageCount: data.page_count,
+      extractedData: data.extracted_data,
+    };
   }
 
   async createUploadTarget(storagePath: string): Promise<UploadTarget> {
@@ -139,5 +168,48 @@ export class SupabaseStore implements Store {
       if (item.path && item.signedUrl) urls[item.path] = item.signedUrl;
     }
     return urls;
+  }
+
+  async downloadFile(storagePath: string): Promise<Uint8Array> {
+    const { data, error } = await this.db.storage.from(BUCKET).download(storagePath);
+    if (error) throw error;
+    return new Uint8Array(await data.arrayBuffer());
+  }
+
+  async claimQueuedDocuments(maxConcurrent: number): Promise<ClaimedDocument[]> {
+    const { data, error } = await this.db.rpc("claim_documents", {
+      max_concurrent: maxConcurrent,
+    });
+    if (error) throw error;
+    return ((data ?? []) as ClaimedRow[]).map((row) => ({
+      id: row.id,
+      storagePath: row.storage_path,
+      mimeType: row.mime_type,
+      documentTypeId: row.document_type_id,
+      attemptCount: row.attempt_count,
+    }));
+  }
+
+  async completeExtraction(id: string, data: ExtractedData): Promise<void> {
+    const { error } = await this.db
+      .from("documents")
+      .update({
+        status: "done",
+        extracted_data: data,
+        failure_reason: null,
+        extracting_since: null,
+      })
+      .eq("id", id)
+      .eq("status", "extracting");
+    if (error) throw error;
+  }
+
+  async failExtraction(id: string, reason: string): Promise<void> {
+    const { error } = await this.db
+      .from("documents")
+      .update({ status: "failed", failure_reason: reason, extracting_since: null })
+      .eq("id", id)
+      .eq("status", "extracting");
+    if (error) throw error;
   }
 }

@@ -4,6 +4,8 @@ import { UploadForm } from "./upload-form";
 
 export const metadata: Metadata = { title: "อัปโหลดเอกสาร" };
 export const dynamic = "force-dynamic";
+// Server actions on this page start Extractions in the background.
+export const maxDuration = 300;
 
 export default async function UploadPage() {
   const documentTypes = await getDocumentService().listDocumentTypes();
