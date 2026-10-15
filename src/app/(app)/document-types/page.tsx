@@ -30,7 +30,11 @@ export default async function DocumentTypesPage() {
           return (
             <li key={type.id} className="px-4 py-4">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                <h2 className="font-medium">{type.name}</h2>
+                <h2 className="font-medium">
+                  <Link href={`/document-types/${type.id}`} className="hover:text-primary hover:underline">
+                    {type.name}
+                  </Link>
+                </h2>
                 {type.isSeed && (
                   <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">ตัวเริ่มต้น</span>
                 )}

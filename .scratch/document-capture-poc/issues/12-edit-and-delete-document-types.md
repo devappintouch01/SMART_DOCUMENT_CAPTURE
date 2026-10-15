@@ -4,10 +4,10 @@
 
 **Blocked by:** 11
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Renaming a Field keeps its values, because values are keyed by Field id
-- [ ] Deleting a Field in use warns first, then drops its values from all Documents
-- [ ] An added Field appears empty on existing Documents until they are re-run or the value is filled in by hand
-- [ ] Deleting a Document Type in use is rejected with a Thai explanation; an unused type can be deleted
-- [ ] Service tests cover renaming, deleting and adding Fields on existing Documents, and the blocked deletion
+- [x] Renaming a Field keeps its values, because values are keyed by Field id
+- [x] Deleting a Field in use warns first, then drops its values from all Documents
+- [x] An added Field appears empty on existing Documents until they are re-run or the value is filled in by hand
+- [x] Deleting a Document Type in use is rejected with a Thai explanation; an unused type can be deleted
+- [x] Service tests cover renaming, deleting and adding Fields on existing Documents, and the blocked deletion

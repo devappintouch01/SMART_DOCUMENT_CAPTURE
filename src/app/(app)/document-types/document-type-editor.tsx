@@ -19,16 +19,31 @@ type Props = {
   // Names of the other Document Types, so a duplicate is caught before saving.
   takenNames: string[];
   submitLabel: string;
-  onSubmit: (name: string, fields: FieldInput[]) => Promise<{ error: string | null }>;
+  onSubmit: (
+    name: string,
+    fields: FieldInput[],
+  ) => Promise<{ error: string | null; notice?: string; stay?: boolean }>;
+  // Asked before saving; a message means "this will change existing Documents,
+  // ask the user to confirm first".
+  confirmBeforeSave?: (name: string, fields: FieldInput[]) => string | null;
 };
 
 // Name and Fields of a Document Type: Header Fields (one value per document)
 // and Line Item Fields (the columns of the item table), each with a Field Kind
 // and an optional description that tells the AI which value to pick.
-export function DocumentTypeEditor({ initialName, initialFields, takenNames, submitLabel, onSubmit }: Props) {
+export function DocumentTypeEditor({
+  initialName,
+  initialFields,
+  takenNames,
+  submitLabel,
+  onSubmit,
+  confirmBeforeSave,
+}: Props) {
   const [name, setName] = useState(initialName);
   const [rows, setRows] = useState<Row[]>(() => withKeys(initialFields));
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [confirmText, setConfirmText] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const update = (key: string, changes: Partial<FieldInput>) =>
@@ -54,21 +69,37 @@ export function DocumentTypeEditor({ initialName, initialFields, takenNames, sub
     });
   }
 
-  async function submit() {
-    const fields = rows.map((r) => ({ scope: r.scope, name: r.name, kind: r.kind, description: r.description }));
+  const currentFields = (): FieldInput[] =>
+    rows.map((r) => ({ id: r.id, scope: r.scope, name: r.name, kind: r.kind, description: r.description }));
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    setConfirmText(null);
+    const result = await onSubmit(name.trim(), currentFields());
+    // A caller that navigates away leaves the button busy; otherwise we come
+    // back with an error or a notice.
+    if (result.error) setError(result.error);
+    if (result.notice) setNotice(result.notice);
+    if (result.error || result.notice || result.stay) setSaving(false);
+  }
+
+  function submit() {
+    setNotice(null);
+    const fields = currentFields();
     const problems = validateDocumentTypeDraft(name, fields, takenNames);
     if (problems.length > 0) {
       setError(problems.join("\n"));
       return;
     }
-    setSaving(true);
     setError(null);
-    const result = await onSubmit(name.trim(), fields);
-    // On success the caller navigates away; only an error brings us back here.
-    if (result.error) {
-      setError(result.error);
-      setSaving(false);
+    const warning = confirmBeforeSave?.(name.trim(), fields) ?? null;
+    if (warning) {
+      setConfirmText(warning);
+      return;
     }
+    void save();
   }
 
   const section = (scope: FieldScope, title: string, hint: string) => {
@@ -169,10 +200,33 @@ export function DocumentTypeEditor({ initialName, initialFields, takenNames, sub
           {error}
         </p>
       )}
+      {notice && (
+        <p role="status" className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+          {notice}
+        </p>
+      )}
+      {confirmText && (
+        <div role="alertdialog" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="whitespace-pre-line">{confirmText}</p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving}
+              className="rounded-md bg-amber-600 px-4 py-1.5 font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+            >
+              ยืนยัน บันทึก
+            </button>
+            <button type="button" onClick={() => setConfirmText(null)} className="px-3 py-1.5 hover:bg-amber-100">
+              ยกเลิก
+            </button>
+          </div>
+        </div>
+      )}
       <button
         type="button"
-        onClick={() => void submit()}
-        disabled={saving}
+        onClick={submit}
+        disabled={saving || confirmText !== null}
         className="rounded-md bg-primary px-5 py-2 font-medium text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
       >
         {saving ? "กำลังบันทึก…" : submitLabel}

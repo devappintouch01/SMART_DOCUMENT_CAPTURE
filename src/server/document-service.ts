@@ -15,6 +15,7 @@ import type {
   FieldScope,
 } from "@/domain/types";
 import { validateDocumentTypeDraft } from "@/domain/document-type-rules";
+import { migrateExtractedData } from "@/domain/document-type-migration";
 import {
   ACCEPTED_MIME_TYPES,
   extensionFor,
@@ -278,6 +279,65 @@ export function createDocumentService(deps: {
     async listDocumentTypesWithCounts(): Promise<DocumentTypeSummary[]> {
       const [types, counts] = await Promise.all([store.listDocumentTypes(), store.countDocumentsByType()]);
       return types.map((type) => ({ ...type, documentCount: counts[type.id] ?? 0 }));
+    },
+
+    // Renames a Document Type and changes its Fields. Documents already read are
+    // brought in line: values of deleted Fields are dropped everywhere, values of
+    // a Field whose kind changed are re-read as the new kind, and renamed or new
+    // Fields keep working because values are keyed by Field id.
+    async updateDocumentType(id: string, input: { name: string; fields: FieldInput[] }): Promise<void> {
+      const types = await store.listDocumentTypes();
+      const type = types.find((t) => t.id === id);
+      if (!type) throw new UserFacingError("ไม่พบประเภทเอกสาร");
+
+      const problems = validateDocumentTypeDraft(
+        input.name,
+        input.fields,
+        types.filter((t) => t.id !== id).map((t) => t.name),
+      );
+      for (const field of input.fields) {
+        if (!field.id) continue;
+        const existing = type.fields.find((f) => f.id === field.id);
+        if (!existing) problems.push(`ช่อง "${field.name}" ไม่ได้อยู่ในประเภทนี้`);
+        else if (existing.scope !== field.scope) problems.push(`ย้ายช่อง "${existing.name}" ข้ามกลุ่มไม่ได้ ให้ลบแล้วเพิ่มช่องใหม่`);
+      }
+      if (problems.length > 0) throw new UserFacingError(problems.join("\n"));
+
+      const keptIds = new Set(input.fields.flatMap((f) => (f.id ? [f.id] : [])));
+      const changes = {
+        removedFieldIds: new Set(type.fields.filter((f) => !keptIds.has(f.id)).map((f) => f.id)),
+        kindChanges: new Map(
+          input.fields.flatMap((f) => {
+            const existing = f.id ? type.fields.find((x) => x.id === f.id) : undefined;
+            return existing && existing.kind !== f.kind ? [[existing.id, f.kind] as const] : [];
+          }),
+        ),
+      };
+
+      await store.updateDocumentType(id, {
+        name: input.name.trim(),
+        fields: input.fields.map((f) => ({ ...f, name: f.name.trim(), description: f.description.trim() })),
+      });
+
+      if (changes.removedFieldIds.size > 0 || changes.kindChanges.size > 0) {
+        for (const document of await store.listExtractedData(id)) {
+          const migrated = migrateExtractedData(document.extractedData, changes);
+          if (migrated.changed) await store.saveExtractedData(document.id, migrated.data);
+        }
+      }
+    },
+
+    // Deletes a Document Type nobody uses; one with Documents is refused.
+    async deleteDocumentType(id: string): Promise<void> {
+      const types = await store.listDocumentTypes();
+      if (!types.some((t) => t.id === id)) throw new UserFacingError("ไม่พบประเภทเอกสาร");
+      const inUse = (await store.countDocumentsByType())[id] ?? 0;
+      if (inUse > 0) {
+        throw new UserFacingError(
+          `ลบไม่ได้ ยังมีเอกสาร ${inUse} ใบใช้ประเภทนี้อยู่ ลบหรือเปลี่ยนประเภทของเอกสารเหล่านั้นก่อน`,
+        );
+      }
+      await store.deleteDocumentType(id);
     },
 
     // A short-lived URL for viewing a stored file, or null if it cannot be made.

@@ -203,6 +203,62 @@ export class SupabaseStore implements Store {
     return id;
   }
 
+  async updateDocumentType(id: string, input: { name: string; fields: FieldInput[] }): Promise<void> {
+    const { error: nameError } = await this.db
+      .from("document_types")
+      .update({ name: input.name, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (nameError) throw nameError;
+
+    const keep = input.fields.filter((f) => f.id).map((f) => f.id as string);
+    const { data: current, error: listError } = await this.db.from("fields").select("id").eq("document_type_id", id);
+    if (listError) throw listError;
+    const removed = current.map((r) => r.id as string).filter((fieldId) => !keep.includes(fieldId));
+    if (removed.length > 0) {
+      const { error } = await this.db.from("fields").delete().in("id", removed);
+      if (error) throw error;
+    }
+
+    for (const [position, f] of input.fields.entries()) {
+      if (f.id) {
+        // Scope is never changed for an existing Field: stored values would no
+        // longer line up with it.
+        const { error } = await this.db
+          .from("fields")
+          .update({ name: f.name, kind: f.kind, description: f.description || null, position })
+          .eq("id", f.id);
+        if (error) throw error;
+      } else {
+        const { error } = await this.db.from("fields").insert({
+          document_type_id: id,
+          scope: f.scope,
+          name: f.name,
+          kind: f.kind,
+          description: f.description || null,
+          position,
+        });
+        if (error) throw error;
+      }
+    }
+  }
+
+  async deleteDocumentType(id: string): Promise<void> {
+    // The documents foreign keys restrict this if a Document still uses the type.
+    const { error } = await this.db.from("document_types").delete().eq("id", id);
+    if (error) throw error;
+  }
+
+  async listExtractedData(documentTypeId: string) {
+    const { data, error } = await this.db
+      .from("documents")
+      .select("id, extracted_data")
+      .eq("document_type_id", documentTypeId)
+      .eq("status", "done")
+      .not("extracted_data", "is", null);
+    if (error) throw error;
+    return data.map((row) => ({ id: row.id as string, extractedData: row.extracted_data as ExtractedData }));
+  }
+
   async countDocumentsByType(): Promise<Record<string, number>> {
     const { data, error } = await this.db.from("documents").select("document_type_id");
     if (error) throw error;

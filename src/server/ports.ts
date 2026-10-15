@@ -44,6 +44,14 @@ export interface Store {
   // Creates a Document Type with its Fields (positions follow the list order)
   // and returns its id.
   createDocumentType(input: { name: string; fields: FieldInput[] }): Promise<string>;
+  // Renames the type and makes its Fields match the list: Fields with an id are
+  // updated in place, Fields without one are added, Fields not listed are
+  // deleted. Positions follow the list order.
+  updateDocumentType(id: string, input: { name: string; fields: FieldInput[] }): Promise<void>;
+  // Deletes a type with no Documents (its Fields go with it).
+  deleteDocumentType(id: string): Promise<void>;
+  // Extracted data of the done Documents of one type.
+  listExtractedData(documentTypeId: string): Promise<{ id: string; extractedData: ExtractedData }[]>;
   // Number of Documents per Document Type id.
   countDocumentsByType(): Promise<Record<string, number>>;
   // Removes the Documents and their stored files; returns how many Documents
@@ -96,6 +104,9 @@ export class AiReaderError extends Error {
 
 // A Field as the user edits it; position comes from the order of the list.
 export type FieldInput = {
+  // Set for a Field that already exists, so editing keeps its values; absent
+  // for a new Field.
+  id?: string;
   scope: FieldScope;
   name: string;
   kind: FieldKind;

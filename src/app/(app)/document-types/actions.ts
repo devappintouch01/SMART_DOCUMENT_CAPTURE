@@ -1,5 +1,7 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { getDocumentService } from "@/server/container";
 import { UserFacingError, type RegisteredFile } from "@/server/document-service";
@@ -46,4 +48,28 @@ export async function createDocumentType(input: {
   } catch (error) {
     return { ok: false, error: describe(error) };
   }
+}
+
+export async function updateDocumentType(
+  id: string,
+  input: { name: string; fields: FieldInput[] },
+): Promise<{ error: string | null }> {
+  try {
+    await getDocumentService().updateDocumentType(id, input);
+  } catch (error) {
+    return { error: describe(error) };
+  }
+  revalidatePath("/document-types");
+  revalidatePath(`/document-types/${id}`);
+  return { error: null };
+}
+
+export async function deleteDocumentType(id: string): Promise<{ error: string | null }> {
+  try {
+    await getDocumentService().deleteDocumentType(id);
+  } catch (error) {
+    return { error: describe(error) };
+  }
+  revalidatePath("/document-types");
+  redirect("/document-types");
 }

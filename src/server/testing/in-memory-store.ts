@@ -122,6 +122,34 @@ export class InMemoryStore implements Store {
     return id;
   }
 
+  async updateDocumentType(id: string, input: { name: string; fields: FieldInput[] }): Promise<void> {
+    const type = this.documentTypes.find((t) => t.id === id);
+    if (!type) throw new Error("no such type");
+    type.name = input.name;
+    type.fields = input.fields.map((f, position) => {
+      const existing = f.id ? type.fields.find((x) => x.id === f.id) : undefined;
+      return {
+        id: existing?.id ?? randomUUID(),
+        scope: existing?.scope ?? f.scope,
+        name: f.name,
+        kind: f.kind,
+        description: f.description || null,
+        position,
+      };
+    });
+  }
+
+  async deleteDocumentType(id: string): Promise<void> {
+    if (this.documents.some((d) => d.documentTypeId === id)) throw new Error("type in use");
+    this.documentTypes = this.documentTypes.filter((t) => t.id !== id);
+  }
+
+  async listExtractedData(documentTypeId: string) {
+    return this.documents
+      .filter((d) => d.documentTypeId === documentTypeId && d.status === "done" && d.extractedData)
+      .map((d) => ({ id: d.id, extractedData: structuredClone(d.extractedData!) }));
+  }
+
   async countDocumentsByType(): Promise<Record<string, number>> {
     const counts: Record<string, number> = {};
     for (const d of this.documents) {
