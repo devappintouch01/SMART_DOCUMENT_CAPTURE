@@ -14,7 +14,7 @@ export default async function UploadPage() {
     <section>
       <h1 className="text-2xl font-semibold">อัปโหลดเอกสาร</h1>
       <p className="mt-1 text-sm text-neutral-500">
-        ลากไฟล์ PDF หรือรูปภาพมาวางได้หลายไฟล์พร้อมกัน ให้ AI ตรวจประเภทให้ หรือเลือกประเภทเอง
+        ลากไฟล์ PDF หรือรูปภาพมาวางได้หลายไฟล์พร้อมกัน ให้ระบบตรวจประเภทให้อัตโนมัติ หรือเลือกประเภทเอกสาร
       </p>
       <UploadForm
         documentTypes={documentTypes.map((t) => ({ id: t.id, name: t.name }))}

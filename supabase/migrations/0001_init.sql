@@ -29,7 +29,7 @@ create table documents (
   storage_path text not null,
   mime_type text not null,
   page_count integer,
-  -- null means the user asked for Classification ("ให้ AI ตรวจให้")
+  -- null means the user asked for Classification ("ให้ AI เลือกประเภทเอกสารให้")
   requested_document_type_id uuid references document_types (id) on delete restrict,
   document_type_id uuid references document_types (id) on delete restrict,
   status text not null default 'queued'

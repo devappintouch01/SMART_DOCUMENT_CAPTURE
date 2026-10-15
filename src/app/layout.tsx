@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     default: "Smart Document Capture",
     template: "%s | Smart Document Capture",
   },
-  description: "ถอดข้อมูลจากเอกสารบัญชีด้วย AI แล้ว copy หรือ export เป็น Excel",
+  description: "ถอดข้อมูลจากเอกสารด้วย AI แล้ว copy หรือ export เป็น Excel",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

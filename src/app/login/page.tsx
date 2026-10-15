@@ -9,7 +9,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm rounded-xl border border-black/10 bg-white p-8 shadow-sm">
         <h1 className="text-xl font-semibold">Smart Document Capture</h1>
         <p className="mt-1 text-sm text-neutral-500">
-          ถอดข้อมูลจากเอกสารบัญชีด้วย AI
+          ถอดข้อมูลจากเอกสารด้วย AI
         </p>
         <LoginForm />
       </div>

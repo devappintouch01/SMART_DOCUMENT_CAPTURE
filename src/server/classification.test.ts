@@ -28,7 +28,7 @@ function setup() {
   return { store, ai, service };
 }
 
-describe("uploading with ให้ AI ตรวจให้", () => {
+describe("uploading with ให้ AI เลือกประเภทเอกสารให้", () => {
   it("creates Documents with no Document Type yet", async () => {
     const { service } = setup();
 

@@ -39,7 +39,7 @@ export type DocumentService = ReturnType<typeof createDocumentService>;
 
 // Thrown when the caller sent something the user can fix; the message is Thai
 // and safe to show.
-export class UserFacingError extends Error {}
+export class UserFacingError extends Error { }
 
 export type RegisteredFile = {
   storagePath: string;
@@ -61,7 +61,7 @@ export const ABANDONED_AFTER_MS = 5 * 60_000;
 const GENERIC_FAILURE = "เกิดข้อผิดพลาดระหว่างอ่านเอกสาร";
 export const NO_MATCHING_TYPE = "ไม่พบประเภทเอกสารที่ตรงกัน";
 
-// What the upload page sends when the user picks "ให้ AI ตรวจให้".
+// What the upload page sends when the user picks "ให้ AI เลือกประเภทเอกสารให้".
 export const AUTO_CLASSIFY = "auto";
 const ABANDONED_FAILURE = "อ่านเอกสารนานผิดปกติ กรุณากดลองใหม่";
 
@@ -555,7 +555,7 @@ export function createDocumentService(deps: {
     async processQueue(): Promise<void> {
       await reclaimAbandoned();
       let types: DocumentType[] | null = null;
-      for (;;) {
+      for (; ;) {
         const claimed = await store.claimQueuedDocuments(concurrency);
         if (claimed.length === 0) return;
         types ??= await store.listDocumentTypes();

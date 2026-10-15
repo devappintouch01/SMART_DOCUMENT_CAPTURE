@@ -40,7 +40,7 @@ export function RerunPanel({ documentId, currentTypeId, documentTypes }: Props) 
             size="lg"
             block
             ariaLabel="ประเภทเอกสาร"
-            options={[{ value: "auto", label: "ให้ AI ตรวจให้" }, ...documentTypes.map((t) => ({ value: t.id, label: t.name }))]}
+            options={[{ value: "auto", label: "ให้ AI เลือกประเภทเอกสารให้" }, ...documentTypes.map((t) => ({ value: t.id, label: t.name }))]}
           />
         </div>
         {!confirming && (

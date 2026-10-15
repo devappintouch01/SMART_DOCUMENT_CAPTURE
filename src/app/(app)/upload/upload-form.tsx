@@ -30,7 +30,7 @@ function formatSize(bytes: number): string {
 }
 
 export function UploadForm({ documentTypes }: Props) {
-  // "auto" = ให้ AI ตรวจให้ (AUTO_CLASSIFY in the Document service).
+  // "auto" = ให้ AI เลือกประเภทเอกสารให้ (AUTO_CLASSIFY in the Document service).
   const [documentTypeId, setDocumentTypeId] = useState("auto");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -152,7 +152,7 @@ export function UploadForm({ documentTypes }: Props) {
           size="lg"
           block
           ariaLabel="ประเภทเอกสาร"
-          options={[{ value: "auto", label: "ให้ AI ตรวจให้" }, ...documentTypes.map((t) => ({ value: t.id, label: t.name }))]}
+          options={[{ value: "auto", label: "ให้ AI เลือกประเภทเอกสารให้" }, ...documentTypes.map((t) => ({ value: t.id, label: t.name }))]}
         />
       </div>
 
@@ -173,9 +173,8 @@ export function UploadForm({ documentTypes }: Props) {
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") input.current?.click();
         }}
-        className={`cursor-pointer rounded-xl border-2 border-dashed p-12 text-center transition-colors ${
-          dragging ? "border-primary bg-primary-soft" : "border-black/20 bg-white hover:border-primary"
-        }`}
+        className={`cursor-pointer rounded-xl border-2 border-dashed p-12 text-center transition-colors ${dragging ? "border-primary bg-primary-soft" : "border-black/20 bg-white hover:border-primary"
+          }`}
       >
         <p className="font-medium">ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</p>
         <p className="mt-1 text-sm text-neutral-500">
