@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
+/* Light theme only. `dark:` utilities apply only under a `.dark` ancestor,
+   which nothing sets today, so the OS theme is ignored. A theme toggle later
+   only needs to add that class. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
+  color-scheme: light;
   --background: #f7f7f8;
   --foreground: #171717;
 }
@@ -9,13 +15,6 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-noto-sans-thai);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

@@ -26,6 +26,7 @@ export type DocumentSummary = {
   id: string;
   fileName: string;
   mimeType: string;
+  storagePath: string;
   documentTypeId: string | null;
   documentTypeName: string | null;
   status: ExtractionStatus;
@@ -33,3 +34,7 @@ export type DocumentSummary = {
   openReviewFlagCount: number;
   uploadedAt: Date;
 };
+
+// A row on the result list: the summary plus a short-lived image URL for the
+// thumbnail (PDFs have none).
+export type DocumentListItem = DocumentSummary & { previewUrl: string | null };

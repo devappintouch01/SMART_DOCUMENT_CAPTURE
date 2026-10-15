@@ -6,7 +6,7 @@ import { login, type LoginState } from "./actions";
 const initialState: LoginState = { error: null };
 
 const inputClass =
-  "mt-1 w-full rounded-md border border-black/15 bg-transparent px-3 py-2 outline-none focus:border-blue-600 dark:border-white/20";
+  "mt-1 w-full rounded-md border border-black/15 bg-transparent px-3 py-2 outline-none focus:border-blue-600";
 
 export function LoginForm() {
   const [state, formAction, pending] = useActionState(login, initialState);
