@@ -26,6 +26,8 @@ export function ListFilters({ documentTypes }: { documentTypes: { id: string; na
     // Read the address bar, not the useSearchParams snapshot: right after a
     // replace() the snapshot can still hold the previous filters.
     const next = new URLSearchParams(window.location.search);
+    // A different filter means a different list: start from its first page.
+    next.delete("page");
     for (const [key, value] of Object.entries(changes)) {
       if (value) next.set(key, value);
       else next.delete(key);

@@ -93,3 +93,74 @@ describe("deleteDocuments", () => {
     expect(store.documents.find((d) => d.id === doc.id)).toBeUndefined();
   });
 });
+
+describe("listDocumentsPage", () => {
+  async function many(count: number) {
+    const store = new InMemoryStore();
+    store.documentTypes = SEED_DOCUMENT_TYPES;
+    const service = createDocumentService({ store, ai: new FakeAiReader() });
+    for (let i = 1; i <= count; i++) {
+      store.addDocument({
+        fileName: `doc-${String(i).padStart(2, "0")}.${i % 2 ? "pdf" : "jpg"}`,
+        mimeType: i % 2 ? "application/pdf" : "image/jpeg",
+        documentTypeId: receipt.id,
+        status: "done",
+        uploadedAt: new Date(Date.UTC(2026, 9, 15, 9, i)),
+      });
+    }
+    return { store, service };
+  }
+  const first = { page: 1, pageSize: 10 as const };
+
+  it("returns one page, newest first, with the total and a running-number offset", async () => {
+    const { service } = await many(25);
+
+    const p1 = await service.listDocumentsPage({}, first);
+    const p3 = await service.listDocumentsPage({}, { page: 3, pageSize: 10 });
+
+    expect(p1).toMatchObject({ total: 25, page: 1, pageCount: 3, offset: 0 });
+    expect(p1.items.map((d) => d.fileName).slice(0, 2)).toEqual(["doc-25.pdf", "doc-24.jpg"]);
+    expect(p1.items).toHaveLength(10);
+    expect(p3).toMatchObject({ page: 3, offset: 20 });
+    expect(p3.items.map((d) => d.fileName)).toEqual(["doc-05.pdf", "doc-04.jpg", "doc-03.pdf", "doc-02.jpg", "doc-01.pdf"]);
+  });
+
+  it("shows everything for \"all\", and clamps a page that is out of range", async () => {
+    const { service } = await many(25);
+
+    const all = await service.listDocumentsPage({}, { page: 1, pageSize: "all" });
+    const past = await service.listDocumentsPage({}, { page: 99, pageSize: 10 });
+    const bad = await service.listDocumentsPage({}, { page: -4, pageSize: 10 });
+
+    expect(all.items).toHaveLength(25);
+    expect(all.pageCount).toBe(1);
+    expect(past.page).toBe(3);
+    expect(bad.page).toBe(1);
+  });
+
+  it("pages the filtered list, and copes with no results", async () => {
+    const { service } = await many(25);
+
+    const odd = await service.listDocumentsPage({ search: ".pdf" }, { page: 2, pageSize: 10 });
+    const none = await service.listDocumentsPage({ search: "ไม่มี" }, first);
+
+    expect(odd).toMatchObject({ total: 13, pageCount: 2, offset: 10 });
+    expect(odd.items).toHaveLength(3);
+    expect(none).toMatchObject({ total: 0, page: 1, pageCount: 1, offset: 0, items: [] });
+  });
+
+  it("signs thumbnail links only for the images on the requested page", async () => {
+    const { store, service } = await many(25);
+    let signed = 0;
+    const original = store.createSignedUrls.bind(store);
+    store.createSignedUrls = async (paths: string[]) => {
+      signed += paths.length;
+      return original(paths);
+    };
+
+    const page = await service.listDocumentsPage({}, first);
+
+    expect(signed).toBe(page.items.filter((d) => d.mimeType.startsWith("image/")).length);
+    expect(signed).toBeLessThan(13);
+  });
+});

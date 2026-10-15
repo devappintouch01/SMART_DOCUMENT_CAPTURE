@@ -29,6 +29,7 @@ const SIZES = {
 export function Select({ value, onChange, options, ariaLabel, disabled, size = "md", block, placeholder }: Props) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  const [up, setUp] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const listId = useId();
 
@@ -54,6 +55,14 @@ export function Select({ value, onChange, options, ariaLabel, disabled, size = "
 
   function openList() {
     if (disabled) return;
+    // Open upward when the list would run off the bottom of the window and there
+    // is more room above (the page-size dropdown sits at the very bottom).
+    const rect = root.current?.getBoundingClientRect();
+    if (rect) {
+      const needed = Math.min(288, options.length * 40 + 16);
+      const below = window.innerHeight - rect.bottom;
+      setUp(below < needed && rect.top > below);
+    }
     setActive(Math.max(selectedIndex, 0));
     setOpen(true);
   }
@@ -142,7 +151,9 @@ export function Select({ value, onChange, options, ariaLabel, disabled, size = "
           id={listId}
           role="listbox"
           aria-label={ariaLabel}
-          className="absolute left-0 z-30 mt-1.5 max-h-72 min-w-full overflow-auto rounded-xl border border-black/10 bg-white py-1.5 text-sm shadow-lg"
+          className={`absolute left-0 z-30 max-h-72 min-w-full overflow-auto rounded-xl border border-black/10 bg-white py-1.5 text-sm shadow-lg ${
+            up ? "bottom-full mb-1.5" : "mt-1.5"
+          }`}
         >
           {options.map((option, index) => {
             const isSelected = option.value === value;

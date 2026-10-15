@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { pageSizeFromParam } from "@/domain/paging";
 import type { DocumentFilter, ExtractionStatus } from "@/domain/types";
 import { getDocumentService } from "@/server/container";
 import { AutoRefresh } from "./auto-refresh";
 import { ListFilters } from "./list-filters";
+import { Pagination } from "./pagination";
 import { ResultList } from "./result-list";
 
 export const metadata: Metadata = { title: "รายการเอกสาร" };
@@ -24,10 +26,15 @@ export default async function ResultListPage({ searchParams }: PageProps<"/">) {
   const filtered = Boolean(filter.documentTypeId || filter.status || filter.search);
 
   const service = getDocumentService();
-  const [documents, documentTypes] = await Promise.all([
-    service.listDocuments(filter),
+  const sizeParam = pageSizeFromParam(first(params.size));
+  const [result, documentTypes] = await Promise.all([
+    service.listDocumentsPage(filter, {
+      page: Number(first(params.page)) || 1,
+      pageSize: sizeParam === "all" ? "all" : Number(sizeParam),
+    }),
     service.listDocumentTypes(),
   ]);
+  const documents = result.items;
   const working = documents.some((d) => d.status === "queued" || d.status === "extracting");
 
   return (
@@ -45,7 +52,7 @@ export default async function ResultListPage({ searchParams }: PageProps<"/">) {
 
       <ListFilters documentTypes={documentTypes.map((t) => ({ id: t.id, name: t.name }))} />
 
-      {documents.length === 0 ? (
+      {result.total === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-black/15 bg-white p-12 text-center">
           <p className="font-medium">{filtered ? "ไม่พบเอกสารที่ตรงกับตัวกรอง" : "ยังไม่มีเอกสาร"}</p>
           <p className="mt-1 text-sm text-neutral-500">
@@ -55,7 +62,22 @@ export default async function ResultListPage({ searchParams }: PageProps<"/">) {
           </p>
         </div>
       ) : (
-        <ResultList documents={documents} />
+        <>
+          <ResultList
+            // A new selection whenever the page, size or filter changes.
+            key={JSON.stringify([result.page, sizeParam, filter])}
+            documents={documents}
+            offset={result.offset}
+          />
+          <Pagination
+            page={result.page}
+            pageCount={result.pageCount}
+            total={result.total}
+            size={sizeParam}
+            offset={result.offset}
+            shown={documents.length}
+          />
+        </>
       )}
     </section>
   );

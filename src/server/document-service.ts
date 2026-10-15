@@ -9,6 +9,7 @@ import {
 import type {
   DocumentDetail,
   DocumentFilter,
+  DocumentSummary,
   DocumentListItem,
   DocumentType,
   DocumentTypeSummary,
@@ -149,6 +150,23 @@ export function createDocumentService(deps: {
     }
     const delay = RETRY_DELAYS_MS[Math.min(attemptCount, RETRY_DELAYS_MS.length) - 1];
     await store.requeueExtraction(id, new Date(now().getTime() + delay));
+  }
+
+  // The Documents that match a filter, newest first.
+  async function matching(filter: DocumentFilter) {
+    const search = filter.search?.trim().normalize("NFC").toLowerCase();
+    return [...(await store.listDocuments())]
+      .filter((d) => !filter.documentTypeId || d.documentTypeId === filter.documentTypeId)
+      .filter((d) => !filter.status || d.status === filter.status)
+      .filter((d) => !search || d.fileName.normalize("NFC").toLowerCase().includes(search))
+      .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
+  }
+
+  // Images get a short-lived URL for their thumbnail; PDFs have none.
+  async function withPreviews(documents: DocumentSummary[]): Promise<DocumentListItem[]> {
+    const imagePaths = documents.filter((d) => d.mimeType.startsWith("image/")).map((d) => d.storagePath);
+    const urls = imagePaths.length ? await store.createSignedUrls(imagePaths) : {};
+    return documents.map((d) => ({ ...d, previewUrl: urls[d.storagePath] ?? null }));
   }
 
   async function loadDone(id: string, action = "แก้ไข") {
@@ -473,17 +491,30 @@ export function createDocumentService(deps: {
     },
 
     async listDocuments(filter: DocumentFilter = {}): Promise<DocumentListItem[]> {
-      const search = filter.search?.trim().normalize("NFC").toLowerCase();
-      const documents = [...(await store.listDocuments())]
-        .filter((d) => !filter.documentTypeId || d.documentTypeId === filter.documentTypeId)
-        .filter((d) => !filter.status || d.status === filter.status)
-        .filter((d) => !search || d.fileName.normalize("NFC").toLowerCase().includes(search))
-        .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
-      const imagePaths = documents
-        .filter((d) => d.mimeType.startsWith("image/"))
-        .map((d) => d.storagePath);
-      const urls = imagePaths.length ? await store.createSignedUrls(imagePaths) : {};
-      return documents.map((d) => ({ ...d, previewUrl: urls[d.storagePath] ?? null }));
+      return withPreviews(await matching(filter));
+    },
+
+    // One page of the filtered list, newest first. pageSize "all" returns every
+    // match. A page past the end is clamped to the last one.
+    async listDocumentsPage(
+      filter: DocumentFilter,
+      paging: { page: number; pageSize: number | "all" },
+    ): Promise<{
+      items: DocumentListItem[];
+      total: number;
+      page: number;
+      pageCount: number;
+      // Number of rows before this page, for the running number.
+      offset: number;
+    }> {
+      const all = await matching(filter);
+      const size = paging.pageSize === "all" ? Math.max(all.length, 1) : Math.max(1, Math.floor(paging.pageSize));
+      const pageCount = Math.max(1, Math.ceil(all.length / size));
+      const page = Math.min(Math.max(1, Math.floor(paging.page) || 1), pageCount);
+      const offset = (page - 1) * size;
+      // Thumbnail links are made for this page only.
+      const items = await withPreviews(all.slice(offset, offset + size));
+      return { items, total: all.length, page, pageCount, offset };
     },
 
     async getDocument(id: string): Promise<DocumentDetail | null> {
