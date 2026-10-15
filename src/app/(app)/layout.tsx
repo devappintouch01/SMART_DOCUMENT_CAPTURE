@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { logout } from "../login/actions";
 
@@ -6,11 +7,12 @@ const navLink = "text-sm text-neutral-600 hover:text-foreground";
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <>
-      <header className="border-b border-black/10 bg-white">
+      <header className="sticky top-0 z-40 border-b border-black/10 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-6">
-            <Link href="/" className="font-semibold">
-              Smart Document Capture
+            <Link href="/" className="flex items-center gap-3 font-semibold">
+              <Image src="/appintouch-logo.png" alt="App Intouch" width={2539} height={519} priority className="h-7 w-auto" />
+              <span className="border-l border-black/15 pl-3">Smart Document Capture</span>
             </Link>
             <nav className="flex gap-4">
               <Link href="/" className={navLink}>
