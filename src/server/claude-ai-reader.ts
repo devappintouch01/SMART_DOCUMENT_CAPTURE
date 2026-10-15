@@ -22,19 +22,22 @@ const KIND_HINTS: Record<FieldKind, string> = {
 const SYSTEM_PROMPT = `You read scanned and photographed Thai business documents (receipts, tax invoices, goods requisitions and similar A4 accounting documents) and return the requested fields as JSON.
 
 Rules:
-- Return each field's value as described in its schema description. If a field does not appear on the document, return null for its value.
+- Return each field's value as described in its schema description. If a field does not appear on the document, return an empty string for its value.
 - Dates: Thai documents usually use the Buddhist Era (พ.ศ.). Convert to the Gregorian year by subtracting 543. A two-digit year is always a Buddhist Era year: "15/10/69" means 15 October 2569 BE, which is 2026-10-15. Thai month names and abbreviations (ม.ค., ก.พ., ... ธ.ค.) are months 1-12.
 - Amounts and numbers: plain decimals only, no thousands separators, currency symbols or words.
 - line_items: one entry per row of the document's item table, top to bottom. Skip subtotal, VAT and total rows; those belong in the header fields. Return an empty array when the document has no item table.
-- When you are unsure of a value (unclear handwriting, smudged or cut-off text, two plausible readings), still give your best reading and set flag_reason to a short reason in Thai, for example "ลายมือไม่ชัด" or "ตัวเลขถูกตัดขอบ". Otherwise flag_reason is null.
-- Set readable to false only when the document as a whole cannot be read (blank, far too blurry, not a document). Then give unreadable_reason in Thai.`;
+- When you are unsure of a value (unclear handwriting, smudged or cut-off text, two plausible readings), still give your best reading and set flag_reason to a short reason in Thai, for example "ลายมือไม่ชัด" or "ตัวเลขถูกตัดขอบ". Otherwise flag_reason is an empty string.
+- Set readable to false only when the document as a whole cannot be read (blank, far too blurry, not a document). Then give unreadable_reason in Thai; otherwise it is an empty string.`;
 
-const nullableString = { anyOf: [{ type: "string" }, { type: "null" }] };
+// Plain strings, never nullable: the API caps union-typed (nullable)
+// parameters at 16 per schema, and a Document Type easily has more Fields.
+// An empty string means "absent".
+const text = { type: "string" };
 
 const valueSchema = (field: Field) => ({
   type: "object",
   description: `${field.name}${field.description ? ` — ${field.description}` : ""}. Value: ${KIND_HINTS[field.kind]}.`,
-  properties: { value: nullableString, flag_reason: nullableString },
+  properties: { value: text, flag_reason: text },
   required: ["value", "flag_reason"],
   additionalProperties: false,
 });
@@ -56,7 +59,7 @@ function buildSchema(documentType: DocumentType) {
       type: "object",
       properties: {
         readable: { type: "boolean" },
-        unreadable_reason: nullableString,
+        unreadable_reason: text,
         header: object(header, "h"),
         line_items: { type: "array", items: object(lines, "l") },
       },
@@ -68,10 +71,10 @@ function buildSchema(documentType: DocumentType) {
   };
 }
 
-type ModelValue = { value: string | null; flag_reason: string | null };
+type ModelValue = { value: string; flag_reason: string };
 type ModelOutput = {
   readable: boolean;
-  unreadable_reason: string | null;
+  unreadable_reason: string;
   header: Record<string, ModelValue>;
   line_items: Record<string, ModelValue>[];
 };
@@ -80,7 +83,10 @@ function mapRow(row: Record<string, ModelValue>, fields: Field[], prefix: string
   const mapped: Record<string, RawValue> = {};
   fields.forEach((field, i) => {
     const item = row[`${prefix}${i}`];
-    mapped[field.id] = { value: item?.value ?? null, flagReason: item?.flag_reason ?? null };
+    mapped[field.id] = {
+      value: item?.value?.trim() || null,
+      flagReason: item?.flag_reason?.trim() || null,
+    };
   });
   return mapped;
 }

@@ -4,14 +4,14 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Claude AI reader adapter implements `extract` with structured outputs built from the Document Type's Fields; the model ID comes from an environment variable; PDFs are sent as document blocks and images as image blocks
-- [ ] The prompt asks for ISO dates (Buddhist Era converted to Common Era, two-digit years read as Buddhist Era) and plain two-decimal Amounts, and passes Field Descriptions to the model
-- [ ] The AI may attach a Review Flag with a Thai reason to any value; flags are stored, though styling them is not required yet
-- [ ] Registration triggers processing after the response is sent; the polling endpoint triggers the same idempotent process step
-- [ ] A Document is claimed by an atomic Queued → Extracting change, and only while fewer than the concurrency limit (default 4) are Extracting
-- [ ] Extracted data is stored on the Document as JSON keyed by Field id, normalised per Field Kind
-- [ ] Result list polls while any Document is Queued or Extracting
-- [ ] Result detail shows the original beside the values; dates display as DD/MM/YYYY in the Buddhist Era
-- [ ] Service tests (fake AI reader) cover Queued → Done, the concurrency limit, and value normalisation
+- [x] Claude AI reader adapter implements `extract` with structured outputs built from the Document Type's Fields; the model ID comes from an environment variable; PDFs are sent as document blocks and images as image blocks
+- [x] The prompt asks for ISO dates (Buddhist Era converted to Common Era, two-digit years read as Buddhist Era) and plain two-decimal Amounts, and passes Field Descriptions to the model
+- [x] The AI may attach a Review Flag with a Thai reason to any value; flags are stored, though styling them is not required yet
+- [x] Registration triggers processing after the response is sent; the polling endpoint triggers the same idempotent process step
+- [x] A Document is claimed by an atomic Queued → Extracting change, and only while fewer than the concurrency limit (default 4) are Extracting
+- [x] Extracted data is stored on the Document as JSON keyed by Field id, normalised per Field Kind
+- [x] Result list polls while any Document is Queued or Extracting
+- [x] Result detail shows the original beside the values; dates display as DD/MM/YYYY in the Buddhist Era
+- [x] Service tests (fake AI reader) cover Queued → Done, the concurrency limit, and value normalisation

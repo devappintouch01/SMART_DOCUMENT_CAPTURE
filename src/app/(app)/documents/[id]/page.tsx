@@ -104,7 +104,7 @@ export default async function DocumentDetailPage({ params }: PageProps<"/documen
                             {lineFields.map((field) => (
                               <td
                                 key={field.id}
-                                className={`px-3 py-2 ${field.kind === "amount" || field.kind === "number" ? "text-right tabular-nums" : ""}`}
+                                className={`px-3 py-2 ${field.kind === "amount" || field.kind === "number" ? "text-right whitespace-nowrap tabular-nums" : "min-w-32"}`}
                               >
                                 <Value field={field} entry={row[field.id]} />
                               </td>
