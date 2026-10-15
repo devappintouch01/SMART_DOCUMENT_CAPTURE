@@ -1,5 +1,10 @@
 import type { DocumentType } from "@/domain/types";
-import type { AiReader, DocumentFile, ExtractionOutput } from "../ports";
+import type {
+  AiReader,
+  ClassificationOutput,
+  DocumentFile,
+  ExtractionOutput,
+} from "../ports";
 
 type ExtractResponse =
   | ExtractionOutput
@@ -9,11 +14,26 @@ type ExtractResponse =
 // Scripted stand-in for the Claude adapter. Queue a response per call with
 // willExtract; an Error is thrown instead of returned.
 export class FakeAiReader implements AiReader {
+  private classifyResponses: (ClassificationOutput | Error)[] = [];
+  classifyCalls: { file: DocumentFile; documentTypes: DocumentType[] }[] = [];
   private extractResponses: ExtractResponse[] = [];
   extractCalls: { file: DocumentFile; documentType: DocumentType }[] = [];
   // Highest number of extract calls running at the same moment.
   peakConcurrentExtracts = 0;
   private running = 0;
+
+  willClassify(...responses: (ClassificationOutput | Error)[]): this {
+    this.classifyResponses.push(...responses);
+    return this;
+  }
+
+  async classify(file: DocumentFile, documentTypes: DocumentType[]): Promise<ClassificationOutput> {
+    this.classifyCalls.push({ file, documentTypes });
+    const next = this.classifyResponses.shift();
+    if (next === undefined) throw new Error("FakeAiReader: no scripted classify response");
+    if (next instanceof Error) throw next;
+    return next;
+  }
 
   willExtract(...responses: ExtractResponse[]): this {
     this.extractResponses.push(...responses);

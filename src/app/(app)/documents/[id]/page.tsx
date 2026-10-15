@@ -8,6 +8,7 @@ import { getDocumentService } from "@/server/container";
 import { AutoRefresh } from "../../auto-refresh";
 import { StatusBadge } from "../../status-badge";
 import { OriginalViewer } from "./original-viewer";
+import { RerunPanel } from "./rerun-panel";
 import { RetryButton } from "./retry-button";
 
 export const metadata: Metadata = { title: "รายละเอียดเอกสาร" };
@@ -30,7 +31,11 @@ function Value({ field, entry }: { field: Field; entry: ExtractedValue | undefin
 
 export default async function DocumentDetailPage({ params }: PageProps<"/documents/[id]">) {
   const { id } = await params;
-  const document = await getDocumentService().getDocument(id);
+  const service = getDocumentService();
+  const [document, documentTypes] = await Promise.all([
+    service.getDocument(id),
+    service.listDocumentTypes(),
+  ]);
   if (!document) notFound();
 
   const fields = document.documentType?.fields ?? [];
@@ -58,6 +63,13 @@ export default async function DocumentDetailPage({ params }: PageProps<"/documen
         <OriginalViewer url={document.fileUrl} mimeType={document.mimeType} />
 
         <div className="space-y-6">
+          {!working && (
+            <RerunPanel
+              documentId={document.id}
+              currentTypeId={document.documentTypeId}
+              documentTypes={documentTypes.map((t) => ({ id: t.id, name: t.name }))}
+            />
+          )}
           {document.status === "failed" && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
               อ่านเอกสารไม่สำเร็จ: {document.failureReason}

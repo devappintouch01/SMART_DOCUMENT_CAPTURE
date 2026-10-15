@@ -158,6 +158,28 @@ export class InMemoryStore implements Store {
       .map((d) => ({ id: d.id, attemptCount: d.attemptCount }));
   }
 
+  async setClassifiedDocumentType(id: string, documentTypeId: string): Promise<void> {
+    const d = this.documents.find((doc) => doc.id === id && doc.status === "extracting");
+    if (d) d.documentTypeId = documentTypeId;
+  }
+
+  async requeueForRerun(id: string, documentTypeId: string | null): Promise<boolean> {
+    const d = this.documents.find(
+      (doc) => doc.id === id && (doc.status === "done" || doc.status === "failed"),
+    );
+    if (!d) return false;
+    Object.assign(d, {
+      status: "queued",
+      documentTypeId,
+      requestedDocumentTypeId: documentTypeId,
+      extractedData: null,
+      failureReason: null,
+      attemptCount: 0,
+      nextAttemptAt: null,
+    });
+    return true;
+  }
+
   async resetFailedExtraction(id: string): Promise<boolean> {
     const d = this.documents.find((doc) => doc.id === id && doc.status === "failed");
     if (!d) return false;

@@ -5,12 +5,17 @@ import type { DocumentType, Field, FieldKind } from "@/domain/types";
 import {
   AiReaderError,
   type AiReader,
+  type ClassificationOutput,
   type DocumentFile,
   type ExtractionOutput,
 } from "./ports";
 
 // ADR 0001: one multimodal call reads the Document and returns its Fields.
 export const DEFAULT_EXTRACTION_MODEL = "claude-opus-5-5";
+// ADR 0003: a cheaper model picks the Document Type first.
+export const DEFAULT_CLASSIFICATION_MODEL = "claude-haiku-5-5";
+
+const CLASSIFY_SYSTEM_PROMPT = `You sort scanned and photographed Thai business documents into the Document Types you are given. Pick the one Document Type this document is. Each Document Type is described by its name and the fields it records; a document matches when it is that kind of document, whatever its layout or vendor. A combined "ใบกำกับภาษี/ใบเสร็จรับเงิน" is a tax invoice when a Tax Invoice type is offered. If none of the Document Types fits, answer "none". Give a short reason in Thai.`;
 
 const KIND_HINTS: Record<FieldKind, string> = {
   text: "text exactly as written on the document",
@@ -125,11 +130,92 @@ function toReaderError(error: unknown): AiReaderError {
   return new AiReaderError(false, "เกิดข้อผิดพลาดระหว่างเรียก AI", { cause: error });
 }
 
+function responseText(response: Anthropic.Beta.BetaMessage): string {
+  if (response.stop_reason === "refusal") {
+    throw new AiReaderError(false, "AI ปฏิเสธการอ่านเอกสารนี้");
+  }
+  if (response.stop_reason === "max_tokens") {
+    throw new AiReaderError(false, "เอกสารยาวเกินกว่าที่ AI อ่านได้ในครั้งเดียว");
+  }
+  return response.content
+    .filter((block): block is Anthropic.Beta.BetaTextBlock => block.type === "text")
+    .map((block) => block.text)
+    .join("");
+}
+
+function parseJson<T>(text: string): T {
+  try {
+    return JSON.parse(text) as T;
+  } catch (error) {
+    throw new AiReaderError(true, "AI ตอบกลับในรูปแบบที่อ่านไม่ได้", { cause: error });
+  }
+}
+
 export class ClaudeAiReader implements AiReader {
   constructor(
     private readonly client = new Anthropic(),
     private readonly model = process.env.AI_EXTRACTION_MODEL || DEFAULT_EXTRACTION_MODEL,
+    private readonly classificationModel = process.env.AI_CLASSIFICATION_MODEL ||
+      DEFAULT_CLASSIFICATION_MODEL,
   ) {}
+
+  async classify(file: DocumentFile, documentTypes: DocumentType[]): Promise<ClassificationOutput> {
+    // Positional keys keep the enum short and free of names the schema
+    // compiler might reject.
+    const keys = documentTypes.map((_, i) => `t${i}`);
+    const catalog = documentTypes
+      .map((type, i) => {
+        const fields = type.fields.filter((f) => f.scope === "header").map((f) => f.name);
+        return `- ${keys[i]}: ${type.name} (fields: ${fields.join(", ")})`;
+      })
+      .join("\n");
+
+    let response: Anthropic.Beta.BetaMessage;
+    try {
+      // No server-side fallbacks: Haiku has none, and a refusal here is rare.
+      response = await this.client.beta.messages.create({
+        model: this.classificationModel,
+        max_tokens: 4000,
+        output_config: {
+          effort: "low",
+          format: {
+            type: "json_schema",
+            schema: {
+              type: "object",
+              properties: {
+                document_type: { type: "string", enum: [...keys, "none"] },
+                reason: { type: "string" },
+              },
+              required: ["document_type", "reason"],
+              additionalProperties: false,
+            },
+          },
+        },
+        system: CLASSIFY_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: [
+              documentBlock(file),
+              {
+                type: "text",
+                text: `Document Types:\n${catalog}\n\nWhich one is this document?`,
+              },
+            ],
+          },
+        ],
+      });
+    } catch (error) {
+      throw toReaderError(error);
+    }
+
+    const output = parseJson<{ document_type: string; reason: string }>(responseText(response));
+    const index = keys.indexOf(output.document_type);
+    return {
+      documentTypeId: index >= 0 ? documentTypes[index].id : null,
+      reason: output.reason?.trim() || "ไม่ตรงกับประเภทเอกสารใดเลย",
+    };
+  }
 
   async extract(file: DocumentFile, documentType: DocumentType): Promise<ExtractionOutput> {
     const { schema, header, lines } = buildSchema(documentType);
@@ -160,24 +246,7 @@ export class ClaudeAiReader implements AiReader {
       throw toReaderError(error);
     }
 
-    if (response.stop_reason === "refusal") {
-      throw new AiReaderError(false, "AI ปฏิเสธการอ่านเอกสารนี้");
-    }
-    if (response.stop_reason === "max_tokens") {
-      throw new AiReaderError(false, "เอกสารยาวเกินกว่าที่ AI อ่านได้ในครั้งเดียว");
-    }
-
-    const text = response.content
-      .filter((block): block is Anthropic.Beta.BetaTextBlock => block.type === "text")
-      .map((block) => block.text)
-      .join("");
-
-    let output: ModelOutput;
-    try {
-      output = JSON.parse(text) as ModelOutput;
-    } catch (error) {
-      throw new AiReaderError(true, "AI ตอบกลับในรูปแบบที่อ่านไม่ได้", { cause: error });
-    }
+    const output = parseJson<ModelOutput>(responseText(response));
 
     if (!output.readable) {
       return { kind: "unreadable", reason: output.unreadable_reason || "อ่านเอกสารไม่ได้" };

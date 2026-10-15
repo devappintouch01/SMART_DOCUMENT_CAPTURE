@@ -46,6 +46,12 @@ export interface Store {
   listStaleExtractions(cutoff: Date): Promise<{ id: string; attemptCount: number }[]>;
   // Failed → Queued with the attempt count reset; false if it was not Failed.
   resetFailedExtraction(id: string): Promise<boolean>;
+  // Records the Document Type Classification picked for an Extracting Document.
+  setClassifiedDocumentType(id: string, documentTypeId: string): Promise<void>;
+  // Done or Failed → Queued for a fresh Extraction with the given Document
+  // Type (null asks for Classification). Clears extracted data, Corrections
+  // included. False if the Document is Queued or Extracting.
+  requeueForRerun(id: string, documentTypeId: string | null): Promise<boolean>;
 }
 
 export type DocumentFile = { bytes: Uint8Array; mimeType: string };
@@ -72,7 +78,15 @@ export class AiReaderError extends Error {
   }
 }
 
+export type ClassificationOutput = {
+  // null when no Document Type fits.
+  documentTypeId: string | null;
+  // Thai, shown to the user when nothing fits.
+  reason: string;
+};
+
 // The Document service reaches the AI only through this port.
 export interface AiReader {
+  classify(file: DocumentFile, documentTypes: DocumentType[]): Promise<ClassificationOutput>;
   extract(file: DocumentFile, documentType: DocumentType): Promise<ExtractionOutput>;
 }

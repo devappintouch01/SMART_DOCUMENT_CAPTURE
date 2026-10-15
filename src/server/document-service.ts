@@ -49,6 +49,10 @@ export const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
 export const ABANDONED_AFTER_MS = 5 * 60_000;
 
 const GENERIC_FAILURE = "เกิดข้อผิดพลาดระหว่างอ่านเอกสาร";
+export const NO_MATCHING_TYPE = "ไม่พบประเภทเอกสารที่ตรงกัน";
+
+// What the upload page sends when the user picks "ให้ AI ตรวจให้".
+export const AUTO_CLASSIFY = "auto";
 const ABANDONED_FAILURE = "อ่านเอกสารนานผิดปกติ กรุณากดลองใหม่";
 
 function toRows(
@@ -98,15 +102,30 @@ export function createDocumentService(deps: {
   }
 
   async function runExtraction(document: ClaimedDocument, types: DocumentType[]) {
-    const documentType = types.find((t) => t.id === document.documentTypeId);
-    if (!documentType) {
-      await store.failExtraction(document.id, "ไม่พบประเภทเอกสาร");
-      return;
-    }
-
     try {
       const bytes = await store.downloadFile(document.storagePath);
-      const output = await ai.extract({ bytes, mimeType: document.mimeType }, documentType);
+      const file = { bytes, mimeType: document.mimeType };
+
+      // ADR 0003: a cheap Classification first, only when no type was chosen.
+      // A retry after a later failure keeps the type already picked.
+      let documentTypeId = document.documentTypeId;
+      if (!documentTypeId) {
+        const classified = await ai.classify(file, types);
+        const match = types.find((t) => t.id === classified.documentTypeId);
+        if (!match) {
+          await store.failExtraction(document.id, `${NO_MATCHING_TYPE}: ${classified.reason}`);
+          return;
+        }
+        await store.setClassifiedDocumentType(document.id, match.id);
+        documentTypeId = match.id;
+      }
+
+      const documentType = types.find((t) => t.id === documentTypeId);
+      if (!documentType) {
+        await store.failExtraction(document.id, "ไม่พบประเภทเอกสาร");
+        return;
+      }
+      const output = await ai.extract(file, documentType);
       if (output.kind === "unreadable") {
         await store.failExtraction(document.id, output.reason);
         return;
@@ -132,6 +151,22 @@ export function createDocumentService(deps: {
     async retryExtraction(id: string): Promise<void> {
       const requeued = await store.resetFailedExtraction(id);
       if (!requeued) throw new UserFacingError("ลองใหม่ได้เฉพาะเอกสารที่อ่านไม่สำเร็จ");
+    },
+
+    // Re-runs the Extraction, optionally with a different Document Type
+    // (AUTO_CLASSIFY asks the AI to choose again). Replaces every value,
+    // Corrections included. The caller then triggers processQueue.
+    async rerunExtraction(id: string, documentTypeId: string): Promise<void> {
+      let typeId: string | null = null;
+      if (documentTypeId !== AUTO_CLASSIFY) {
+        const types = await store.listDocumentTypes();
+        if (!types.some((t) => t.id === documentTypeId)) {
+          throw new UserFacingError("ไม่พบประเภทเอกสารที่เลือก");
+        }
+        typeId = documentTypeId;
+      }
+      const requeued = await store.requeueForRerun(id, typeId);
+      if (!requeued) throw new UserFacingError("เอกสารนี้กำลังอ่านอยู่ รอให้เสร็จก่อนจึงอ่านใหม่ได้");
     },
 
     async listDocumentTypes(): Promise<DocumentType[]> {
@@ -191,10 +226,14 @@ export function createDocumentService(deps: {
       const batchProblem = validateBatchSize(input.files.length);
       if (batchProblem) throw new UserFacingError(batchProblem);
 
-      const types = await store.listDocumentTypes();
-      if (!types.some((t) => t.id === input.documentTypeId)) {
-        throw new UserFacingError("ไม่พบประเภทเอกสารที่เลือก");
+      const auto = input.documentTypeId === AUTO_CLASSIFY;
+      if (!auto) {
+        const types = await store.listDocumentTypes();
+        if (!types.some((t) => t.id === input.documentTypeId)) {
+          throw new UserFacingError("ไม่พบประเภทเอกสารที่เลือก");
+        }
       }
+      const typeId = auto ? null : input.documentTypeId;
 
       const documentIds = await store.insertDocuments(
         input.files.map((file) => ({
@@ -202,8 +241,8 @@ export function createDocumentService(deps: {
           storagePath: file.storagePath,
           mimeType: file.mimeType,
           pageCount: file.pageCount,
-          requestedDocumentTypeId: input.documentTypeId,
-          documentTypeId: input.documentTypeId,
+          requestedDocumentTypeId: typeId,
+          documentTypeId: typeId,
         })),
       );
       return { documentIds };

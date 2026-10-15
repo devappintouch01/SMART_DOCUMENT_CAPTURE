@@ -4,11 +4,11 @@
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Claude adapter implements `classify` with Haiku 5.5 (model ID from an environment variable), returning a Document Type id or "none" with a reason
-- [ ] Upload page offers "ให้ AI ตรวจให้" (default) or a specific Document Type
-- [ ] Documents uploaded with "ให้ AI ตรวจให้" run Classification, then Extraction; "none" fails permanently with the Thai reason
-- [ ] Result detail lets the user change the Document Type and re-run, or re-run as is, after a warning that Corrections will be replaced
-- [ ] Re-running replaces all extracted data
-- [ ] Service tests cover automatic Classification through to Done, no match leading to Failed, and re-running after a type change
+- [x] Claude adapter implements `classify` with Haiku 5.5 (model ID from an environment variable), returning a Document Type id or "none" with a reason
+- [x] Upload page offers "ให้ AI ตรวจให้" (default) or a specific Document Type
+- [x] Documents uploaded with "ให้ AI ตรวจให้" run Classification, then Extraction; "none" fails permanently with the Thai reason
+- [x] Result detail lets the user change the Document Type and re-run, or re-run as is, after a warning that Corrections will be replaced
+- [x] Re-running replaces all extracted data
+- [x] Service tests cover automatic Classification through to Done, no match leading to Failed, and re-running after a type change

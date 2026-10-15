@@ -33,7 +33,8 @@ function formatSize(bytes: number): string {
 }
 
 export function UploadForm({ documentTypes }: Props) {
-  const [documentTypeId, setDocumentTypeId] = useState(documentTypes[0]?.id ?? "");
+  // "auto" = ให้ AI ตรวจให้ (AUTO_CLASSIFY in the Document service).
+  const [documentTypeId, setDocumentTypeId] = useState("auto");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -161,6 +162,7 @@ export function UploadForm({ documentTypes }: Props) {
           disabled={busy}
           className="mt-1 w-full rounded-md border border-black/15 bg-white px-3 py-2"
         >
+          <option value="auto">ให้ AI ตรวจให้</option>
           {documentTypes.map((type) => (
             <option key={type.id} value={type.id}>
               {type.name}

@@ -227,6 +227,34 @@ export class SupabaseStore implements Store {
     return data.map((row) => ({ id: row.id as string, attemptCount: row.attempt_count as number }));
   }
 
+  async setClassifiedDocumentType(id: string, documentTypeId: string): Promise<void> {
+    const { error } = await this.db
+      .from("documents")
+      .update({ document_type_id: documentTypeId })
+      .eq("id", id)
+      .eq("status", "extracting");
+    if (error) throw error;
+  }
+
+  async requeueForRerun(id: string, documentTypeId: string | null): Promise<boolean> {
+    const { data, error } = await this.db
+      .from("documents")
+      .update({
+        status: "queued",
+        document_type_id: documentTypeId,
+        requested_document_type_id: documentTypeId,
+        extracted_data: null,
+        failure_reason: null,
+        attempt_count: 0,
+        next_attempt_at: null,
+      })
+      .eq("id", id)
+      .in("status", ["done", "failed"])
+      .select("id");
+    if (error) throw error;
+    return data.length > 0;
+  }
+
   async resetFailedExtraction(id: string): Promise<boolean> {
     const { data, error } = await this.db
       .from("documents")
