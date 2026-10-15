@@ -103,6 +103,15 @@ export function ResultList({ documents, offset }: { documents: DocumentListItem[
         <span className="text-neutral-500">
           {hasSelection ? `เลือกแล้ว ${chosen.length} ใบ${lockedTypeName ? ` (${lockedTypeName})` : ""}` : "ยังไม่ได้เลือก"}
         </span>
+        {hasSelection && (
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            className="text-primary underline-offset-2 hover:underline"
+          >
+            ยกเลิกการเลือก
+          </button>
+        )}
 
         {/* Always shown; they switch on once something is ticked. */}
         <a
