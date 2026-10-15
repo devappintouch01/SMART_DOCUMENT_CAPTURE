@@ -93,3 +93,23 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 - ไม่ต้องจบด้วยจุด (.)
 - Body อธิบาย **why** ไม่ใช่ **what**
 - **REQUIRED**: Include footer `Co-Authored-By: <AI model ที่ใช้>` เสมอ เช่น `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`
+
+## Development
+
+- `npm run dev`: start the app at http://localhost:3000 (local login `admin` / `1234` from `.env.local`)
+- `npm test`: Vitest. Tests go through the Document service with the fakes in `src/server/testing/` (see the spec's Testing Decisions)
+- `npm run db:migrate`: apply new files in `supabase/migrations/` to the Supabase database
+- `npm run lint`, `npm run build`
+- Environment variables are listed in `.env.example`
+
+Pages and API routes call the Document service (`getDocumentService()`), never Supabase or the AI directly.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

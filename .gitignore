@@ -1,0 +1,15 @@
+# env files
+.env*.local
+.env
+!.env.example
+
+# vercel
+.vercel
+
+# dependencies & build
+node_modules
+.next
+out
+coverage
+*.tsbuildinfo
+next-env.d.ts
