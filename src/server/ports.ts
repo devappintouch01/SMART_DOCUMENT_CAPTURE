@@ -44,6 +44,8 @@ export interface Store {
   requeueExtraction(id: string, nextAttemptAt: Date): Promise<void>;
   // Extractions that have been running since before the cutoff.
   listStaleExtractions(cutoff: Date): Promise<{ id: string; attemptCount: number }[]>;
+  // Replaces a Done Document's extracted data (Corrections, confirmed flags).
+  saveExtractedData(id: string, data: ExtractedData): Promise<boolean>;
   // Failed → Queued with the attempt count reset; false if it was not Failed.
   resetFailedExtraction(id: string): Promise<boolean>;
   // Records the Document Type Classification picked for an Extracting Document.

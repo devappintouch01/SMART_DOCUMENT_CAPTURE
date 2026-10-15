@@ -1,0 +1,291 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
+import type { CorrectionInput, FlagTarget } from "@/domain/corrections";
+import type { ExtractedData, ExtractedValue } from "@/domain/extracted-data";
+import { formatDateBE, parseThaiDate } from "@/domain/format";
+import type { Field } from "@/domain/types";
+import { confirmReviewFlags, saveCorrections } from "./actions";
+
+type Props = {
+  documentId: string;
+  headerFields: Field[];
+  lineFields: Field[];
+  data: ExtractedData;
+};
+
+type Row = { sourceIndex: number | null; key: string; values: Record<string, string> };
+
+// How a stored value appears in an input the user can type into.
+function toInput(field: Field, value: string | null): string {
+  if (value === null) return "";
+  return field.kind === "date" ? formatDateBE(value) : value;
+}
+
+// Back to what the server expects; a bad date is reported before sending.
+function toStored(field: Field, text: string): { value: string; problem: string | null } {
+  if (field.kind !== "date" || text.trim() === "") return { value: text, problem: null };
+  const iso = parseThaiDate(text);
+  return iso
+    ? { value: iso, problem: null }
+    : { value: text, problem: `${field.name}: ใส่วันที่เป็น วว/ดด/ปปปป (พ.ศ.) เช่น 15/10/2569` };
+}
+
+const inputBase =
+  "w-full rounded-md border bg-white px-2 py-1 text-sm outline-none focus:border-blue-600";
+
+function Cell({
+  field,
+  value,
+  entry,
+  onChange,
+  onConfirm,
+  busy,
+}: {
+  field: Field;
+  value: string;
+  entry: ExtractedValue | undefined;
+  onChange: (text: string) => void;
+  onConfirm: () => void;
+  busy: boolean;
+}) {
+  const flagged = entry?.flag?.status === "open";
+  const numeric = field.kind === "amount" || field.kind === "number";
+  return (
+    <div>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        inputMode={numeric ? "decimal" : undefined}
+        placeholder={field.kind === "date" ? "วว/ดด/ปปปป" : undefined}
+        aria-label={field.name}
+        className={`${inputBase} ${numeric ? "text-right tabular-nums" : ""} ${
+          flagged ? "border-amber-400 bg-amber-50" : "border-black/15"
+        } ${entry?.corrected ? "font-medium text-blue-800" : ""}`}
+      />
+      {flagged && (
+        <p className="mt-0.5 flex items-center gap-2 text-xs text-amber-800">
+          <span>⚠ {entry?.flag?.reason}</span>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            className="rounded border border-amber-300 px-1.5 py-0.5 hover:bg-amber-100 disabled:opacity-50"
+          >
+            ถูกต้อง
+          </button>
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Header Fields as a form and Line Items as an editable table (spec: result
+// detail). Saving stores every changed value as a Correction.
+export function ResultEditor({ documentId, headerFields, lineFields, data }: Props) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const initialHeader = useMemo(
+    () => Object.fromEntries(headerFields.map((f) => [f.id, toInput(f, data.header[f.id]?.value ?? null)])),
+    [headerFields, data],
+  );
+  const initialRows = useMemo<Row[]>(
+    () =>
+      data.lineItems.map((row, index) => ({
+        sourceIndex: index,
+        key: `src-${index}`,
+        values: Object.fromEntries(lineFields.map((f) => [f.id, toInput(f, row[f.id]?.value ?? null)])),
+      })),
+    [lineFields, data],
+  );
+
+  const [header, setHeader] = useState(initialHeader);
+  const [rows, setRows] = useState(initialRows);
+
+  const dirty = JSON.stringify([header, rows]) !== JSON.stringify([initialHeader, initialRows]);
+  const openFlags: FlagTarget[] = [
+    ...headerFields
+      .filter((f) => data.header[f.id]?.flag?.status === "open")
+      .map((f) => ({ rowIndex: null, fieldId: f.id })),
+    ...data.lineItems.flatMap((row, rowIndex) =>
+      lineFields.filter((f) => row[f.id]?.flag?.status === "open").map((f) => ({ rowIndex, fieldId: f.id })),
+    ),
+  ];
+
+  function run(action: () => Promise<{ error: string | null }>) {
+    startTransition(async () => {
+      const result = await action();
+      setError(result.error);
+      if (!result.error) router.refresh();
+    });
+  }
+
+  function save() {
+    const problems: string[] = [];
+    const convert = (fields: Field[], values: Record<string, string>) =>
+      Object.fromEntries(
+        fields.map((field) => {
+          const { value, problem } = toStored(field, values[field.id] ?? "");
+          if (problem) problems.push(problem);
+          return [field.id, value];
+        }),
+      );
+    const input: CorrectionInput = {
+      header: convert(headerFields, header),
+      lineItems: rows.map((row) => ({ sourceIndex: row.sourceIndex, values: convert(lineFields, row.values) })),
+    };
+    if (problems.length > 0) {
+      setError([...new Set(problems)].join("\n"));
+      return;
+    }
+    run(() => saveCorrections(documentId, input));
+  }
+
+  const confirmOne = (target: FlagTarget) => run(() => confirmReviewFlags(documentId, [target]));
+
+  return (
+    <div className="space-y-6">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-black/10 bg-white px-4 py-3 text-sm shadow-sm">
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending || !dirty}
+          className="rounded-md bg-blue-600 px-4 py-1.5 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {pending ? "กำลังบันทึก…" : "บันทึกการแก้ไข"}
+        </button>
+        {dirty && (
+          <button
+            type="button"
+            onClick={() => {
+              setHeader(initialHeader);
+              setRows(initialRows);
+              setError(null);
+            }}
+            disabled={pending}
+            className="text-neutral-500 hover:text-foreground"
+          >
+            ยกเลิกการแก้ไข
+          </button>
+        )}
+        <span className={dirty ? "text-amber-700" : "text-neutral-500"}>
+          {dirty ? "มีการแก้ไขที่ยังไม่ได้บันทึก" : "ค่าที่แก้ไขแล้วแสดงเป็นสีน้ำเงิน"}
+        </span>
+        {openFlags.length > 0 && (
+          <button
+            type="button"
+            onClick={() => run(() => confirmReviewFlags(documentId, openFlags))}
+            disabled={pending || dirty}
+            title={dirty ? "บันทึกการแก้ไขก่อน" : undefined}
+            className="ml-auto rounded-md border border-amber-300 px-3 py-1.5 text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+          >
+            ยืนยันทั้ง {openFlags.length} ช่องที่ควรตรวจ
+          </button>
+        )}
+      </div>
+      {error && (
+        <p role="alert" className="whitespace-pre-line rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {error}
+        </p>
+      )}
+
+      <div className="rounded-xl border border-black/10 bg-white">
+        <h2 className="border-b border-black/10 px-4 py-3 font-medium">ข้อมูลหลัก</h2>
+        <div className="divide-y divide-black/5">
+          {headerFields.map((field) => (
+            <div key={field.id} className="grid grid-cols-5 items-start gap-3 px-4 py-2 text-sm">
+              <label className="col-span-2 pt-1 text-neutral-500">{field.name}</label>
+              <div className="col-span-3">
+                <Cell
+                  field={field}
+                  value={header[field.id] ?? ""}
+                  entry={data.header[field.id]}
+                  busy={pending || dirty}
+                  onChange={(text) => setHeader((current) => ({ ...current, [field.id]: text }))}
+                  onConfirm={() => confirmOne({ rowIndex: null, fieldId: field.id })}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {lineFields.length > 0 && (
+        <div className="rounded-xl border border-black/10 bg-white">
+          <h2 className="border-b border-black/10 px-4 py-3 font-medium">รายการ ({rows.length})</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-neutral-500">
+                <tr>
+                  {lineFields.map((field) => (
+                    <th key={field.id} className="px-2 py-2 font-normal whitespace-nowrap">
+                      {field.name}
+                    </th>
+                  ))}
+                  <th className="w-8" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/5">
+                {rows.map((row) => (
+                  <tr key={row.key} className="align-top">
+                    {lineFields.map((field) => (
+                      <td key={field.id} className="min-w-28 px-2 py-2">
+                        <Cell
+                          field={field}
+                          value={row.values[field.id] ?? ""}
+                          entry={row.sourceIndex === null ? undefined : data.lineItems[row.sourceIndex]?.[field.id]}
+                          busy={pending || dirty}
+                          onChange={(text) =>
+                            setRows((current) =>
+                              current.map((r) =>
+                                r.key === row.key ? { ...r, values: { ...r.values, [field.id]: text } } : r,
+                              ),
+                            )
+                          }
+                          onConfirm={() =>
+                            row.sourceIndex !== null && confirmOne({ rowIndex: row.sourceIndex, fieldId: field.id })
+                          }
+                        />
+                      </td>
+                    ))}
+                    <td className="px-1 py-2 text-center">
+                      <button
+                        type="button"
+                        aria-label="ลบแถวนี้"
+                        onClick={() => setRows((current) => current.filter((r) => r.key !== row.key))}
+                        className="text-neutral-400 hover:text-red-600"
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="border-t border-black/10 px-4 py-2">
+            <button
+              type="button"
+              onClick={() =>
+                setRows((current) => [
+                  ...current,
+                  {
+                    sourceIndex: null,
+                    key: `new-${crypto.randomUUID()}`,
+                    values: Object.fromEntries(lineFields.map((f) => [f.id, ""])),
+                  },
+                ])
+              }
+              className="text-sm text-blue-700 hover:underline"
+            >
+              + เพิ่มแถว
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

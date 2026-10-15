@@ -158,6 +158,13 @@ export class InMemoryStore implements Store {
       .map((d) => ({ id: d.id, attemptCount: d.attemptCount }));
   }
 
+  async saveExtractedData(id: string, data: ExtractedData): Promise<boolean> {
+    const d = this.documents.find((doc) => doc.id === id && doc.status === "done");
+    if (!d) return false;
+    d.extractedData = structuredClone(data);
+    return true;
+  }
+
   async setClassifiedDocumentType(id: string, documentTypeId: string): Promise<void> {
     const d = this.documents.find((doc) => doc.id === id && doc.status === "extracting");
     if (d) d.documentTypeId = documentTypeId;

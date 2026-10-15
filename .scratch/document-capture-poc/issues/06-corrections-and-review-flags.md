@@ -4,11 +4,11 @@
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Header Fields render as a form and Line Items as an editable table
-- [ ] Saving stores Corrections while keeping the AI's original value
-- [ ] Line Item rows can be added and removed
-- [ ] Flagged values are highlighted with their reason; correcting or confirming clears the flag
-- [ ] Result list shows the open Review Flag count per Document
-- [ ] Service tests cover saving Corrections, clearing a flag by Correction and by confirm, and the open-flag count
+- [x] Header Fields render as a form and Line Items as an editable table
+- [x] Saving stores Corrections while keeping the AI's original value
+- [x] Line Item rows can be added and removed
+- [x] Flagged values are highlighted with their reason; correcting or confirming clears the flag
+- [x] Result list shows the open Review Flag count per Document
+- [x] Service tests cover saving Corrections, clearing a flag by Correction and by confirm, and the open-flag count

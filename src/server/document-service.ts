@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { applyCorrections, confirmFlags, type CorrectionInput, type FlagTarget } from "@/domain/corrections";
 import {
   toExtractedValue,
   type ExtractedData,
@@ -94,6 +95,16 @@ export function createDocumentService(deps: {
     await store.requeueExtraction(id, new Date(now().getTime() + delay));
   }
 
+  async function loadDone(id: string) {
+    const document = await store.getDocument(id);
+    if (!document || document.status !== "done" || !document.extractedData) {
+      throw new UserFacingError("แก้ไขได้เฉพาะเอกสารที่อ่านเสร็จแล้ว");
+    }
+    const documentType = (await store.listDocumentTypes()).find((t) => t.id === document.documentTypeId);
+    if (!documentType) throw new UserFacingError("ไม่พบประเภทเอกสาร");
+    return { document, documentType };
+  }
+
   async function reclaimAbandoned() {
     const cutoff = new Date(now().getTime() - ABANDONED_AFTER_MS);
     for (const stale of await store.listStaleExtractions(cutoff)) {
@@ -151,6 +162,22 @@ export function createDocumentService(deps: {
     async retryExtraction(id: string): Promise<void> {
       const requeued = await store.resetFailedExtraction(id);
       if (!requeued) throw new UserFacingError("ลองใหม่ได้เฉพาะเอกสารที่อ่านไม่สำเร็จ");
+    },
+
+    // Saves what the user changed on the result detail page. Changed values
+    // become Corrections and settle their Review Flags; invalid values reject
+    // the whole save with a Thai message per problem.
+    async saveCorrections(id: string, input: CorrectionInput): Promise<void> {
+      const { document, documentType } = await loadDone(id);
+      const result = applyCorrections(document.extractedData!, documentType.fields, input);
+      if (!result.ok) throw new UserFacingError(result.problems.join("\n"));
+      await store.saveExtractedData(id, result.data);
+    },
+
+    // Marks Review Flags as checked without changing the values.
+    async confirmReviewFlags(id: string, targets: FlagTarget[]): Promise<void> {
+      const { document } = await loadDone(id);
+      await store.saveExtractedData(id, confirmFlags(document.extractedData!, targets));
     },
 
     // Re-runs the Extraction, optionally with a different Document Type
