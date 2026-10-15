@@ -58,7 +58,7 @@ const inputBase =
   "w-full rounded-md border bg-white px-2 py-1 text-sm outline-none focus:border-primary";
 
 // Looks like the one-line input for short text and grows to show everything
-// when the text is long or has line breaks.
+// when the text is long or has line breaks; the corner handle stretches it.
 function AutoTextarea({
   value,
   onChange,
@@ -86,7 +86,7 @@ function AutoTextarea({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       aria-label={label}
-      className={`${className} resize-none overflow-hidden leading-snug`}
+      className={`${className} resize-y overflow-auto leading-snug`}
     />
   );
 }
