@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { readPageCount, uploadToSignedUrl } from "@/lib/browser-upload";
-import { resolveMimeType, validateFileMeta } from "@/domain/upload-limits";
+import { prepareFile, uploadToSignedUrl } from "@/lib/browser-upload";
+import { isHeic } from "@/domain/upload-limits";
 import type { FieldInput } from "@/server/ports";
 import { requestUploads } from "../../upload/actions";
 import { OriginalViewer } from "../../documents/[id]/original-viewer";
@@ -26,20 +26,14 @@ export function NewDocumentTypeFlow({ takenNames }: { takenNames: string[] }) {
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
-  async function start(file: File) {
+  async function start(picked: File) {
     setError(null);
-    const mimeType = resolveMimeType(file.name, file.type);
-    setStage({ kind: "working", message: "กำลังตรวจไฟล์…" });
+    setStage({
+      kind: "working",
+      message: isHeic(picked.name, picked.type) ? "กำลังแปลงภาพ HEIC เป็น JPG…" : "กำลังตรวจไฟล์…",
+    });
 
-    let pageCount = 1;
-    try {
-      pageCount = await readPageCount(file, mimeType);
-    } catch {
-      setStage({ kind: "pick" });
-      setError("ไฟล์ PDF เสียหรืออ่านไม่ได้");
-      return;
-    }
-    const problem = validateFileMeta({ fileName: file.name, mimeType, sizeBytes: file.size, pageCount });
+    const { file, mimeType, pageCount, problem } = await prepareFile(picked);
     if (problem) {
       setStage({ kind: "pick" });
       setError(problem);
@@ -155,11 +149,11 @@ export function NewDocumentTypeFlow({ takenNames }: { takenNames: string[] }) {
         }`}
       >
         <p className="font-medium">ลากเอกสารตัวอย่างมาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</p>
-        <p className="mt-1 text-sm text-neutral-500">PDF, JPG, PNG, WebP · ไฟล์ละไม่เกิน 10 MB · PDF ไม่เกิน 10 หน้า</p>
+        <p className="mt-1 text-sm text-neutral-500">PDF, JPG, PNG, WebP, HEIC · ไฟล์ละไม่เกิน 10 MB · PDF ไม่เกิน 10 หน้า</p>
         <input
           ref={input}
           type="file"
-          accept="application/pdf,image/jpeg,image/png,image/webp"
+          accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0];

@@ -3,12 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import {
-  MAX_FILES_PER_BATCH,
-  resolveMimeType,
-  validateFileMeta,
-} from "@/domain/upload-limits";
-import { readPageCount, uploadToSignedUrl } from "@/lib/browser-upload";
+import { isHeic, MAX_FILES_PER_BATCH } from "@/domain/upload-limits";
+import { prepareFile, uploadToSignedUrl } from "@/lib/browser-upload";
 import { registerUploads, requestUploads } from "./actions";
 
 type Props = { documentTypes: { id: string; name: string }[] };
@@ -39,6 +35,7 @@ export function UploadForm({ documentTypes }: Props) {
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [converting, setConverting] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -55,32 +52,23 @@ export function UploadForm({ documentTypes }: Props) {
       setNotice(`อัปโหลดได้ครั้งละไม่เกิน ${MAX_FILES_PER_BATCH} ไฟล์ จึงเพิ่มได้อีก ${Math.max(room, 0)} ไฟล์`);
     }
 
+    const picked = incoming.slice(0, Math.max(room, 0));
+    if (picked.some((f) => isHeic(f.name, f.type))) setConverting(true);
+
     const added: Entry[] = [];
-    for (const file of incoming.slice(0, Math.max(room, 0))) {
-      const mimeType = resolveMimeType(file.name, file.type);
-      let pageCount = 1;
-      let message: string | null = null;
-      try {
-        pageCount = await readPageCount(file, mimeType);
-      } catch {
-        message = "ไฟล์ PDF เสียหรืออ่านไม่ได้";
-      }
-      message ??= validateFileMeta({
-        fileName: file.name,
-        mimeType,
-        sizeBytes: file.size,
-        pageCount,
-      });
+    for (const original of picked) {
+      const { file, mimeType, pageCount, problem } = await prepareFile(original);
       added.push({
         key: crypto.randomUUID(),
         file,
         mimeType,
         pageCount,
-        status: message ? "rejected" : "ready",
+        status: problem ? "rejected" : "ready",
         progress: 0,
-        message,
+        message: problem,
       });
     }
+    setConverting(false);
     setEntries((current) => [...current, ...added]);
   }
 
@@ -194,14 +182,14 @@ export function UploadForm({ documentTypes }: Props) {
       >
         <p className="font-medium">ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</p>
         <p className="mt-1 text-sm text-neutral-500">
-          PDF, JPG, PNG, WebP · ไฟล์ละไม่เกิน 10 MB · PDF ไม่เกิน 10 หน้า · ครั้งละไม่เกิน{" "}
+          PDF, JPG, PNG, WebP, HEIC (จาก iPhone) · ไฟล์ละไม่เกิน 10 MB · PDF ไม่เกิน 10 หน้า · ครั้งละไม่เกิน{" "}
           {MAX_FILES_PER_BATCH} ไฟล์
         </p>
         <input
           ref={input}
           type="file"
           multiple
-          accept="application/pdf,image/jpeg,image/png,image/webp"
+          accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
           className="hidden"
           onChange={(event) => {
             if (event.target.files) void addFiles(event.target.files);
@@ -210,6 +198,9 @@ export function UploadForm({ documentTypes }: Props) {
         />
       </div>
 
+      {converting && (
+        <p className="text-sm text-neutral-600">กำลังแปลงภาพ HEIC จาก iPhone เป็น JPG…</p>
+      )}
       {notice && (
         <p role="alert" className="text-sm text-red-600">
           {notice}

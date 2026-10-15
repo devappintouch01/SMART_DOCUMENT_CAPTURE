@@ -12,12 +12,14 @@
     "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "db:seed": "node --env-file=.env.local scripts/seed.mjs",
     "try:extract": "tsx --conditions=react-server --env-file=.env.local scripts/try-extract.mts",
-    "try:propose": "tsx --conditions=react-server --env-file=.env.local scripts/try-propose.mts"
+    "try:propose": "tsx --conditions=react-server --env-file=.env.local scripts/try-propose.mts",
+    "retry:doc": "tsx --conditions=react-server --env-file=.env.local scripts/retry-doc.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.134.0",
     "@supabase/supabase-js": "^2.117.3",
     "exceljs": "^4.4.0",
+    "heic2any": "^0.0.4",
     "next": "16.4.1",
     "pdf-lib": "^1.17.1",
     "react": "19.3.0",

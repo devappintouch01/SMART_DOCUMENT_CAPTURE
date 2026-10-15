@@ -25,6 +25,8 @@ const mimeByExtension: Record<string, string> = {
   jpeg: "image/jpeg",
   png: "image/png",
   webp: "image/webp",
+  heic: "image/heic",
+  heif: "image/heif",
 };
 
 // Some browsers report an empty type; fall back to the file extension.
@@ -32,6 +34,17 @@ export function resolveMimeType(fileName: string, reportedType: string): string 
   if (reportedType) return reportedType;
   const extension = fileName.split(".").pop()?.toLowerCase() ?? "";
   return mimeByExtension[extension] ?? "";
+}
+
+// iPhone photos. The AI cannot read them, so the browser converts them to JPEG
+// before anything is checked or uploaded.
+export function isHeic(fileName: string, reportedType: string): boolean {
+  return /^image\/hei[cf]/i.test(reportedType) || /\.hei[cf]$/i.test(fileName);
+}
+
+// IMG_0042.HEIC → IMG_0042.jpg
+export function heicToJpegName(fileName: string): string {
+  return fileName.replace(/\.hei[cf]$/i, "") + ".jpg";
 }
 
 export function extensionFor(mimeType: string): string {
