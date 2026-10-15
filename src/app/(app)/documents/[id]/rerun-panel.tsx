@@ -36,7 +36,7 @@ export function RerunPanel({ documentId, currentTypeId, documentTypes }: Props) 
               setConfirming(false);
             }}
             disabled={pending}
-            className="mt-1 w-full rounded-md border border-black/15 bg-white px-3 py-2"
+            className="select-lg mt-1 w-full border border-black/15 px-3 py-2"
           >
             <option value="auto">ให้ AI ตรวจให้</option>
             {documentTypes.map((type) => (
