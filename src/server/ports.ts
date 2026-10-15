@@ -52,6 +52,17 @@ export interface Store {
   deleteDocumentType(id: string): Promise<void>;
   // Extracted data of the done Documents of one type.
   listExtractedData(documentTypeId: string): Promise<{ id: string; extractedData: ExtractedData }[]>;
+  // --- demo reset ---
+  // Removes every Document and every stored file.
+  deleteAllDocuments(): Promise<void>;
+  deleteNonSeedDocumentTypes(): Promise<void>;
+  // Makes the given seeded types (with their original Fields) exist again.
+  restoreSeedDocumentTypes(types: DocumentType[]): Promise<void>;
+  uploadFile(storagePath: string, bytes: Uint8Array, mimeType: string): Promise<void>;
+  // A Document that is already Done, with its data and a chosen upload time.
+  insertCompletedDocument(
+    input: NewDocument & { extractedData: ExtractedData; uploadedAt: Date },
+  ): Promise<string>;
   // Number of Documents per Document Type id.
   countDocumentsByType(): Promise<Record<string, number>>;
   // Removes the Documents and their stored files; returns how many Documents

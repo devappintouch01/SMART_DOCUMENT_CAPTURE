@@ -15,6 +15,7 @@ import type {
   FieldScope,
 } from "@/domain/types";
 import { validateDocumentTypeDraft } from "@/domain/document-type-rules";
+import { DEMO_RESET_PHRASE, type DemoFixture, type DemoValue } from "@/domain/demo";
 import { migrateExtractedData } from "@/domain/document-type-migration";
 import {
   ACCEPTED_MIME_TYPES,
@@ -63,6 +64,32 @@ export const NO_MATCHING_TYPE = "ไม่พบประเภทเอกส�
 // What the upload page sends when the user picks "ให้ AI ตรวจให้".
 export const AUTO_CLASSIFY = "auto";
 const ABANDONED_FAILURE = "อ่านเอกสารนานผิดปกติ กรุณากดลองใหม่";
+
+// A fixture's values as stored data, built the same way as an AI result so the
+// example Documents carry normalised values and Review Flags.
+function fixtureData(fixture: DemoFixture, type: DocumentType): ExtractedData {
+  const toRaw = (value: DemoValue | undefined): RawValue => {
+    if (value === undefined) return { value: null, flagReason: null };
+    const text = typeof value === "string" ? value : value.v;
+    const flag = typeof value === "string" ? null : (value.flag ?? null);
+    return { value: text === "" ? null : text, flagReason: flag };
+  };
+  const row = (scope: FieldScope, values: Record<string, DemoValue>): ExtractedRow => {
+    const known = new Set(type.fields.filter((f) => f.scope === scope).map((f) => f.name));
+    for (const name of Object.keys(values)) {
+      if (!known.has(name)) throw new Error(`fixture ${fixture.fileName}: no ${scope} Field "${name}"`);
+    }
+    return Object.fromEntries(
+      type.fields
+        .filter((f) => f.scope === scope)
+        .map((f) => [f.id, toExtractedValue(f.kind, toRaw(values[f.name]))]),
+    );
+  };
+  return {
+    header: row("header", fixture.header),
+    lineItems: fixture.lineItems.map((item) => row("line_item", item)),
+  };
+}
 
 // The AI's draft, tidied so the editor never starts with blank, duplicate or
 // out-of-range fields.
@@ -325,6 +352,48 @@ export function createDocumentService(deps: {
           if (migrated.changed) await store.saveExtractedData(document.id, migrated.data);
         }
       }
+    },
+
+    // Returns the app to a clean demo state: every Document and every
+    // non-seeded Document Type is deleted, the seeded types get their original
+    // Fields back, and each fixture is loaded as a finished Document. The AI is
+    // never called. Fixtures are checked before anything is deleted.
+    async resetDemoData(input: {
+      confirmation: string;
+      seedTypes: DocumentType[];
+      fixtures: DemoFixture[];
+    }): Promise<{ loaded: number }> {
+      if (input.confirmation.trim() !== DEMO_RESET_PHRASE) {
+        throw new UserFacingError(`พิมพ์คำว่า "${DEMO_RESET_PHRASE}" เพื่อยืนยัน`);
+      }
+
+      const prepared = input.fixtures.map((fixture) => {
+        const type = input.seedTypes.find((t) => t.name === fixture.documentType);
+        if (!type) throw new Error(`fixture ${fixture.fileName}: unknown Document Type ${fixture.documentType}`);
+        return { fixture, type, data: fixtureData(fixture, type) };
+      });
+
+      await store.deleteAllDocuments();
+      await store.deleteNonSeedDocumentTypes();
+      await store.restoreSeedDocumentTypes(input.seedTypes);
+
+      // The first fixture ends up newest, so the list opens with it on top.
+      const now = Date.now();
+      for (const [index, { fixture, type, data }] of prepared.entries()) {
+        const storagePath = `demo-${randomUUID()}.${extensionFor(fixture.mimeType)}`;
+        await store.uploadFile(storagePath, fixture.bytes, fixture.mimeType);
+        await store.insertCompletedDocument({
+          fileName: fixture.fileName,
+          storagePath,
+          mimeType: fixture.mimeType,
+          pageCount: fixture.pageCount,
+          requestedDocumentTypeId: type.id,
+          documentTypeId: type.id,
+          extractedData: data,
+          uploadedAt: new Date(now - index * 60_000),
+        });
+      }
+      return { loaded: prepared.length };
     },
 
     // Deletes a Document Type nobody uses; one with Documents is refused.

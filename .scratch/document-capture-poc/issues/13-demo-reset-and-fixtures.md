@@ -4,10 +4,12 @@
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Fake Thai Receipts, Tax Invoices and Goods Requisitions are created with no real company data, including one with handwriting and one combined Receipt/Tax Invoice; the files and their pre-baked extracted data are committed
-- [ ] At least one example Document carries Review Flags
-- [ ] Reset requires typing a confirmation phrase
-- [ ] Reset deletes all Documents and their Storage objects, removes non-seeded Document Types, restores the seeds, and loads the example Documents as Done
-- [ ] A service test covers the state after a reset
+- [x] Fake Thai Receipts, Tax Invoices and Goods Requisitions are created with no real company data, including one with handwriting and one combined Receipt/Tax Invoice; the files and their pre-baked extracted data are committed
+- [x] At least one example Document carries Review Flags
+- [x] Reset requires typing a confirmation phrase
+- [x] Reset deletes all Documents and their Storage objects, removes non-seeded Document Types, restores the seeds, and loads the example Documents as Done
+- [x] A service test covers the state after a reset
+
+**Not run on the live database:** pressing the reset wipes every Document and custom type, so the destructive steps (delete all Documents and files, delete non-seeded types) are covered by in-memory tests only. The restore and the upload/insert steps were checked against the real Supabase without touching anyone else's data. The first real press is the live test; it is idempotent, so pressing it again recovers from a failure part-way.

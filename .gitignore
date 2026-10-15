@@ -13,3 +13,4 @@ out
 coverage
 *.tsbuildinfo
 next-env.d.ts
+.fixture-tmp

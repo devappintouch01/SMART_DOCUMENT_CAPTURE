@@ -176,6 +176,87 @@ export class SupabaseStore implements Store {
     return new Uint8Array(await data.arrayBuffer());
   }
 
+  async deleteAllDocuments(): Promise<void> {
+    const { error } = await this.db.from("documents").delete().not("id", "is", null);
+    if (error) throw error;
+
+    // Every stored file sits at the top level of the bucket.
+    for (let round = 0; round < 50; round++) {
+      const { data, error: listError } = await this.db.storage.from(BUCKET).list("", { limit: 1000 });
+      if (listError) throw listError;
+      const names = data.filter((f) => f.id).map((f) => f.name);
+      if (names.length === 0) return;
+      const { error: removeError } = await this.db.storage.from(BUCKET).remove(names);
+      if (removeError) throw removeError;
+    }
+  }
+
+  async deleteNonSeedDocumentTypes(): Promise<void> {
+    const { error } = await this.db.from("document_types").delete().eq("is_seed", false);
+    if (error) throw error;
+  }
+
+  async restoreSeedDocumentTypes(types: DocumentType[]): Promise<void> {
+    for (const type of types) {
+      const { error } = await this.db
+        .from("document_types")
+        .upsert({ id: type.id, name: type.name, is_seed: true, updated_at: new Date().toISOString() });
+      if (error) throw error;
+
+      const { error: fieldsError } = await this.db.from("fields").upsert(
+        type.fields.map((f) => ({
+          id: f.id,
+          document_type_id: type.id,
+          scope: f.scope,
+          name: f.name,
+          kind: f.kind,
+          description: f.description,
+          position: f.position,
+        })),
+      );
+      if (fieldsError) throw fieldsError;
+
+      // Fields the user added to a seeded type go away; the originals stay.
+      const keep = type.fields.map((f) => f.id);
+      const { error: pruneError } = await this.db
+        .from("fields")
+        .delete()
+        .eq("document_type_id", type.id)
+        .not("id", "in", `(${keep.join(",")})`);
+      if (pruneError) throw pruneError;
+    }
+  }
+
+  async uploadFile(storagePath: string, bytes: Uint8Array, mimeType: string): Promise<void> {
+    const { error } = await this.db.storage
+      .from(BUCKET)
+      .upload(storagePath, bytes, { contentType: mimeType, upsert: false });
+    if (error) throw error;
+  }
+
+  async insertCompletedDocument(
+    input: NewDocument & { extractedData: ExtractedData; uploadedAt: Date },
+  ): Promise<string> {
+    const { data, error } = await this.db
+      .from("documents")
+      .insert({
+        file_name: input.fileName,
+        storage_path: input.storagePath,
+        mime_type: input.mimeType,
+        page_count: input.pageCount,
+        requested_document_type_id: input.requestedDocumentTypeId,
+        document_type_id: input.documentTypeId,
+        status: "done",
+        extracted_data: input.extractedData,
+        is_demo_seed: true,
+        uploaded_at: input.uploadedAt.toISOString(),
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    return data.id as string;
+  }
+
   async createDocumentType(input: { name: string; fields: FieldInput[] }): Promise<string> {
     const { data, error } = await this.db
       .from("document_types")

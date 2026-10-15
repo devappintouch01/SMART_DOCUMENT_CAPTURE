@@ -104,6 +104,35 @@ export class InMemoryStore implements Store {
     return bytes;
   }
 
+  async deleteAllDocuments(): Promise<void> {
+    this.documents = [];
+    this.files.clear();
+  }
+
+  async deleteNonSeedDocumentTypes(): Promise<void> {
+    this.documentTypes = this.documentTypes.filter((t) => t.isSeed);
+  }
+
+  async restoreSeedDocumentTypes(types: DocumentType[]): Promise<void> {
+    for (const seed of types) {
+      const clone = structuredClone(seed);
+      const index = this.documentTypes.findIndex((t) => t.id === seed.id);
+      if (index >= 0) this.documentTypes[index] = clone;
+      else this.documentTypes.push(clone);
+    }
+  }
+
+  async uploadFile(storagePath: string, bytes: Uint8Array): Promise<void> {
+    this.files.set(storagePath, bytes);
+  }
+
+  async insertCompletedDocument(
+    input: NewDocument & { extractedData: ExtractedData; uploadedAt: Date },
+  ): Promise<string> {
+    const { extractedData, uploadedAt, ...doc } = input;
+    return this.addDocument({ ...doc, status: "done", extractedData, uploadedAt }).id;
+  }
+
   async createDocumentType(input: { name: string; fields: FieldInput[] }): Promise<string> {
     const id = randomUUID();
     this.documentTypes.push({

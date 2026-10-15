@@ -99,6 +99,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 - `npm run dev`: start the app at http://localhost:3000 (local login `admin` / `1234` from `.env.local`)
 - `npm test`: Vitest. Tests go through the Document service with the fakes in `src/server/testing/` (see the spec's Testing Decisions)
 - `npm run db:migrate`: apply new files in `supabase/migrations/` to the Supabase database
+- `npm run fixtures:build`: re-render the fake demo documents in `fixtures/demo/` from `scripts/demo-fixtures-data.mjs` (needs Chrome)
 - `npm run db:seed`: upsert the three seeded Document Types (safe to re-run)
 - `npm run try:extract -- <file> [Document Type name]`: run the real Claude adapter on one file and print the result (needs `ANTHROPIC_API_KEY`; costs API credit)
 - `npm run lint`, `npm run build`

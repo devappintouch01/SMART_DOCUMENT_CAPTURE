@@ -5,6 +5,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // exceljs relies on Node internals and is loaded as-is on the server.
   serverExternalPackages: ["exceljs"],
+  // The demo reset reads the example documents from disk; make sure they ship
+  // with the function that runs it.
+  outputFileTracingIncludes: { "/demo": ["./fixtures/demo/**/*"] },
   turbopack: {
     rules: {
       "*.css": {

@@ -24,11 +24,16 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
               </Link>
             </nav>
           </div>
-          <form action={logout}>
+          <div className="flex items-center gap-5">
+            <Link href="/demo" className="text-xs text-neutral-400 hover:text-foreground">
+              รีเซ็ต demo
+            </Link>
+            <form action={logout}>
             <button type="submit" className="text-sm text-neutral-500 hover:text-foreground">
               ออกจากระบบ
             </button>
-          </form>
+            </form>
+          </div>
         </div>
       </header>
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">{children}</main>
