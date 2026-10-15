@@ -185,7 +185,7 @@ export function DocumentTypeEditor({
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="เช่น ใบวางบิล"
-          className={`${inputClass} mt-1 max-w-md`}
+          className={`${inputClass} mt-1.5 block max-w-md`}
         />
       </label>
 
