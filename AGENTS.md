@@ -100,6 +100,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 - `npm test`: Vitest. Tests go through the Document service with the fakes in `src/server/testing/` (see the spec's Testing Decisions)
 - `npm run db:migrate`: apply new files in `supabase/migrations/` to the Supabase database
 - `npm run fixtures:build`: re-render the fake demo documents in `fixtures/demo/` from `scripts/demo-fixtures-data.mjs` (needs Chrome)
+- `npm run check:classification [-- --runs N]`: sends the demo documents through the real Haiku Classification and reports the hit rate against the 1-in-10 threshold of ADR 0003 (paid API calls)
 - `npm run db:seed`: upsert the three seeded Document Types (safe to re-run)
 - `npm run try:extract -- <file> [Document Type name]`: run the real Claude adapter on one file and print the result (needs `ANTHROPIC_API_KEY`; costs API credit)
 - `npm run lint`, `npm run build`

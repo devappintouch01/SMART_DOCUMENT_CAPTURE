@@ -14,7 +14,8 @@
     "try:extract": "tsx --conditions=react-server --env-file=.env.local scripts/try-extract.mts",
     "try:propose": "tsx --conditions=react-server --env-file=.env.local scripts/try-propose.mts",
     "retry:doc": "tsx --conditions=react-server --env-file=.env.local scripts/retry-doc.mts",
-    "fixtures:build": "node scripts/build-demo-fixtures.mjs"
+    "fixtures:build": "node scripts/build-demo-fixtures.mjs",
+    "check:classification": "tsx --conditions=react-server --env-file=.env.local scripts/check-classification.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.134.0",

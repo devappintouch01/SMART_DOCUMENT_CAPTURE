@@ -4,9 +4,11 @@
 
 **Blocked by:** 05, 13
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The script goes through the same Claude adapter `classify` path as the app
-- [ ] The expected Document Type for each example Document is recorded alongside the files
-- [ ] Output lists each file, its expected and chosen types, and the overall result against the 1-in-10 threshold
-- [ ] Usage is documented, including that it makes real, paid API calls
+- [x] The script goes through the same Claude adapter `classify` path as the app
+- [x] The expected Document Type for each example Document is recorded alongside the files
+- [x] Output lists each file, its expected and chosen types, and the overall result against the 1-in-10 threshold
+- [x] Usage is documented, including that it makes real, paid API calls
+
+**Result:** 12 of 12 correct over 2 runs of the 6 demo documents, about 2.2 s each; threshold not crossed (see ADR 0003).
