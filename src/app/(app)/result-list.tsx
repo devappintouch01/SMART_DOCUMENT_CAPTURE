@@ -108,7 +108,7 @@ export function ResultList({ documents, offset }: { documents: DocumentListItem[
         <a
           href={canExport ? `/api/documents/export?ids=${chosen.join(",")}` : undefined}
           aria-disabled={!canExport}
-          className={`${actionBase} border-green-600 text-green-800 ${
+          className={`${actionBase} ml-auto border-green-600 text-green-800 ${
             canExport ? "hover:bg-green-50" : "pointer-events-none cursor-not-allowed opacity-40"
           }`}
         >
