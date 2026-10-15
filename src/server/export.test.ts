@@ -44,6 +44,9 @@ function setup() {
   return { store, service, doc };
 }
 
+// exceljs types row.values as an array-or-object union; rows here are always arrays.
+const vals = (row: ExcelJS.Row) => row.values as unknown as unknown[];
+
 async function read(bytes: Uint8Array) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(bytes as unknown as ArrayBuffer);
@@ -152,5 +155,105 @@ describe("copy as text", () => {
     expect(copyValue("date", "2026-10-15")).toBe("15/10/2569");
     expect(copyValue("amount", "1250.00")).toBe("1250.00");
     expect(copyValue("text", null)).toBe("");
+  });
+});
+
+describe("exportDocuments", () => {
+  function setupMany() {
+    const store = new InMemoryStore();
+    store.documentTypes = SEED_DOCUMENT_TYPES;
+    const service = createDocumentService({ store, ai: new FakeAiReader() });
+    const invoice = (fileName: string, minute: number, no: string, total: string, items: [string, string][]) =>
+      store.addDocument({
+        fileName,
+        status: "done",
+        documentTypeId: taxInvoice.id,
+        uploadedAt: new Date(Date.UTC(2026, 9, 15, 9, minute)),
+        extractedData: {
+          header: {
+            [id("เลขที่ใบกำกับภาษี")]: toExtractedValue("text", raw(no)),
+            [id("วันที่")]: toExtractedValue("date", raw("2026-10-15")),
+            [id("ยอดรวมทั้งสิ้น")]: toExtractedValue("amount", raw(total)),
+          },
+          lineItems: items.map(([name, qty]) => ({
+            [id("รายการ")]: toExtractedValue("text", raw(name)),
+            [id("จำนวน")]: toExtractedValue("number", raw(qty)),
+          })),
+        },
+      });
+    const b = invoice("b.pdf", 2, "IV-002", "200", [["หมึก", "2"]]);
+    const a = invoice("a.pdf", 1, "IV-001", "100", [["กระดาษ", "10"], ["แฟ้ม", "5"]]);
+    const c = invoice("c.pdf", 3, "IV-003", "300", []);
+    return { store, service, a, b, c };
+  }
+
+  it("puts one row per Document on ข้อมูลหลัก, oldest upload first, numbered from 1", async () => {
+    const { service, a, b, c } = setupMany();
+
+    const { fileName, bytes } = await service.exportDocuments([c.id, a.id, b.id]);
+    const sheet = (await read(bytes)).getWorksheet(HEADER_SHEET)!;
+
+    expect(fileName).toBe("ใบกำกับภาษี_3ใบ.xlsx");
+    expect(vals(sheet.getRow(1)).slice(1, 6)).toEqual([
+      "ลำดับ", "ชื่อไฟล์", "เลขที่ใบกำกับภาษี", "วันที่", "ชื่อผู้ขาย",
+    ]);
+    const body = [2, 3, 4].map((r) => [sheet.getRow(r).getCell(1).value, sheet.getRow(r).getCell(2).value, sheet.getRow(r).getCell(3).value]);
+    expect(body).toEqual([[1, "a.pdf", "IV-001"], [2, "b.pdf", "IV-002"], [3, "c.pdf", "IV-003"]]);
+    expect(sheet.getRow(2).getCell(4).value).toBeInstanceOf(Date);
+    const totalCol = vals(sheet.getRow(1)).indexOf("ยอดรวมทั้งสิ้น");
+    expect(sheet.getRow(3).getCell(totalCol).value).toBe(200);
+    expect(sheet.getRow(3).getCell(totalCol).numFmt).toBe("#,##0.00");
+  });
+
+  it("collects every Line Item on รายการ, each tied to its Document by ลำดับ and ชื่อไฟล์", async () => {
+    const { service, a, b, c } = setupMany();
+
+    const sheet = (await read((await service.exportDocuments([a.id, b.id, c.id])).bytes)).getWorksheet(LINE_ITEMS_SHEET)!;
+
+    expect(vals(sheet.getRow(1)).slice(1, 5)).toEqual(["ลำดับ", "ชื่อไฟล์", "รหัสสินค้า", "รายการ"]);
+    const rows = [2, 3, 4].map((r) => [1, 2, 4, 5].map((c) => sheet.getRow(r).getCell(c).value));
+    expect(rows).toEqual([
+      [1, "a.pdf", "กระดาษ", 10],
+      [1, "a.pdf", "แฟ้ม", 5],
+      [2, "b.pdf", "หมึก", 2],
+    ]);
+    // c.pdf has no Line Items, so it adds no rows.
+    expect(sheet.rowCount).toBe(4);
+  });
+
+  it("uses Corrections", async () => {
+    const { service, a, b } = setupMany();
+    await service.saveCorrections(a.id, {
+      header: { [id("เลขที่ใบกำกับภาษี")]: "IV-001", [id("วันที่")]: "2026-10-15", [id("ยอดรวมทั้งสิ้น")]: "150" },
+      lineItems: [
+        { sourceIndex: 0, values: { [id("รายการ")]: "กระดาษ", [id("จำนวน")]: "10" } },
+        { sourceIndex: 1, values: { [id("รายการ")]: "แฟ้ม", [id("จำนวน")]: "5" } },
+      ],
+    });
+
+    const sheet = (await read((await service.exportDocuments([a.id, b.id])).bytes)).getWorksheet(HEADER_SHEET)!;
+    const totalCol = vals(sheet.getRow(1)).indexOf("ยอดรวมทั้งสิ้น");
+    expect(sheet.getRow(2).getCell(totalCol).value).toBe(150);
+  });
+
+  it("refuses a selection that mixes Document Types", async () => {
+    const { store, service, a, b } = setupMany();
+    store.documents.find((d) => d.id === b.id)!.documentTypeId = SEED_DOCUMENT_TYPES[0].id;
+
+    await expect(service.exportDocuments([a.id, b.id])).rejects.toThrow(/ประเภทเดียวกัน/);
+  });
+
+  it("refuses Documents that are not done, and empty or unknown selections", async () => {
+    const { store, service, a, b } = setupMany();
+    store.documents.find((d) => d.id === b.id)!.status = "queued";
+
+    await expect(service.exportDocuments([a.id, b.id])).rejects.toThrow(/ยังไม่เสร็จ 1 ใบ/);
+    await expect(service.exportDocuments([])).rejects.toBeInstanceOf(UserFacingError);
+    await expect(service.exportDocuments([a.id, "00000000-0000-0000-0000-000000000000"])).rejects.toBeInstanceOf(UserFacingError);
+  });
+
+  it("counts a Document once even if it is listed twice", async () => {
+    const { service, a } = setupMany();
+    expect((await service.exportDocuments([a.id, a.id])).fileName).toBe("ใบกำกับภาษี_1ใบ.xlsx");
   });
 });

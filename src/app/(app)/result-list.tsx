@@ -48,6 +48,17 @@ export function ResultList({ documents }: { documents: DocumentListItem[] }) {
   const chosen = useMemo(() => [...selected].filter((id) => visibleIds.has(id)), [selected, visibleIds]);
   const allSelected = documents.length > 0 && chosen.length === documents.length;
 
+  // Excel export needs finished Documents of one Document Type; say what is
+  // wrong instead of just greying the button out.
+  const exportProblem = useMemo(() => {
+    const picked = documents.filter((d) => chosen.includes(d.id));
+    const notDone = picked.filter((d) => d.status !== "done").length;
+    if (notDone > 0) return `ยังมี ${notDone} ใบที่อ่านไม่เสร็จหรือล้มเหลว ส่งออกได้เฉพาะใบที่เสร็จแล้ว`;
+    const types = new Set(picked.map((d) => d.documentTypeName));
+    if (types.size > 1) return `เลือกปนกัน ${types.size} ประเภท (${[...types].join(", ")}) เลือกประเภทเดียวกันเท่านั้น เพราะคอลัมน์ไม่เหมือนกัน`;
+    return null;
+  }, [documents, chosen]);
+
   const toggle = (id: string) =>
     setSelected((current) => {
       const next = new Set(current);
@@ -82,6 +93,15 @@ export function ResultList({ documents }: { documents: DocumentListItem[] }) {
         {chosen.length > 0 && !confirming && (
           <>
             <span className="text-neutral-500">เลือกแล้ว {chosen.length} ใบ</span>
+            <a
+              href={exportProblem ? undefined : `/api/documents/export?ids=${chosen.join(",")}`}
+              aria-disabled={exportProblem !== null}
+              className={`rounded-md border border-green-600 px-3 py-1 font-medium text-green-800 ${
+                exportProblem ? "pointer-events-none opacity-40" : "hover:bg-green-50"
+              }`}
+            >
+              ส่งออก Excel
+            </a>
             <button
               type="button"
               onClick={() => setConfirming(true)}
@@ -109,6 +129,9 @@ export function ResultList({ documents }: { documents: DocumentListItem[] }) {
         )}
         {error && <span className="text-red-700">{error}</span>}
       </div>
+      {chosen.length > 0 && exportProblem && (
+        <p className="mt-1 text-sm text-amber-800">ส่งออก Excel ไม่ได้: {exportProblem}</p>
+      )}
 
       <ul className="mt-2 divide-y divide-black/10 rounded-xl border border-black/10 bg-white">
         {documents.map((document) => (

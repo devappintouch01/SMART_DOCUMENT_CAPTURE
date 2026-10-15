@@ -85,3 +85,50 @@ export async function buildDocumentWorkbook(
 
   return new Uint8Array(await workbook.xlsx.writeBuffer());
 }
+
+export type ExportItem = { fileName: string; data: ExtractedData };
+
+// Many Documents of one Document Type in a single workbook. "ข้อมูลหลัก" has one
+// row per Document (Header Fields as columns) and "รายการ" has every Line Item
+// of every Document; "ลำดับ" and "ชื่อไฟล์" start both sheets so Line Items can
+// be tied back to their Document (VLOOKUP, filters) and to the original file.
+export async function buildMultiWorkbook(
+  documentType: DocumentType,
+  items: ExportItem[],
+): Promise<Uint8Array> {
+  const workbook = new ExcelJS.Workbook();
+  const headerFields = documentType.fields.filter((f) => f.scope === "header");
+  const lineFields = lineFieldsOf(documentType);
+  const leading = ["ลำดับ", "ชื่อไฟล์"];
+
+  const writeValues = (row: ExcelJS.Row, fields: Field[], values: Record<string, { value: string | null }>) => {
+    fields.forEach((field, index) => {
+      const { value, numFmt } = toCell(field.kind, values[field.id]?.value ?? null);
+      const cell = row.getCell(leading.length + index + 1);
+      cell.value = value;
+      if (numFmt) cell.numFmt = numFmt;
+    });
+  };
+
+  const header = workbook.addWorksheet(HEADER_SHEET);
+  header.columns = [...leading, ...headerFields.map((f) => f.id)].map((key) => ({ key }));
+  styleHeaderRow(header.addRow([...leading, ...headerFields.map((f) => f.name)]));
+  items.forEach((item, index) => {
+    const row = header.addRow([index + 1, item.fileName]);
+    writeValues(row, headerFields, item.data.header);
+  });
+  fitColumns(header);
+
+  const lines = workbook.addWorksheet(LINE_ITEMS_SHEET);
+  lines.columns = [...leading, ...lineFields.map((f) => f.id)].map((key) => ({ key }));
+  styleHeaderRow(lines.addRow([...leading, ...lineFields.map((f) => f.name)]));
+  items.forEach((item, index) => {
+    for (const lineItem of item.data.lineItems) {
+      const row = lines.addRow([index + 1, item.fileName]);
+      writeValues(row, lineFields, lineItem);
+    }
+  });
+  fitColumns(lines);
+
+  return new Uint8Array(await workbook.xlsx.writeBuffer());
+}

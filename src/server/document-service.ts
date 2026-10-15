@@ -19,7 +19,7 @@ import {
   validateFileMeta,
   type FileMeta,
 } from "@/domain/upload-limits";
-import { buildDocumentWorkbook } from "./excel";
+import { buildDocumentWorkbook, buildMultiWorkbook } from "./excel";
 import {
   AiReaderError,
   type AiReader,
@@ -182,6 +182,38 @@ export function createDocumentService(deps: {
       const bytes = await buildDocumentWorkbook(documentType, document.extractedData!);
       const baseName = document.fileName.replace(/\.[^.]+$/, "") || "export";
       return { fileName: `${baseName}.xlsx`, bytes };
+    },
+
+    // Several Documents of one Document Type as a single workbook, oldest
+    // upload first. Mixed types or Documents that are not done are refused.
+    async exportDocuments(ids: string[]): Promise<{ fileName: string; bytes: Uint8Array }> {
+      const unique = [...new Set(ids)];
+      if (unique.length === 0) throw new UserFacingError("ยังไม่ได้เลือกเอกสาร");
+
+      const loaded = await Promise.all(unique.map((id) => store.getDocument(id)));
+      const documents = loaded.filter((d) => d !== null);
+      if (documents.length !== unique.length) throw new UserFacingError("ไม่พบเอกสารบางใบที่เลือก");
+
+      const notDone = documents.filter((d) => d.status !== "done" || !d.extractedData);
+      if (notDone.length > 0) {
+        throw new UserFacingError(`ส่งออกได้เฉพาะเอกสารที่อ่านเสร็จแล้ว (ยังไม่เสร็จ ${notDone.length} ใบ)`);
+      }
+      const typeIds = new Set(documents.map((d) => d.documentTypeId));
+      if (typeIds.size > 1) {
+        throw new UserFacingError("เลือกเอกสารที่เป็นประเภทเดียวกันเท่านั้น เพราะแต่ละประเภทมีคอลัมน์ไม่เหมือนกัน");
+      }
+
+      const documentType = (await store.listDocumentTypes()).find((t) => t.id === documents[0].documentTypeId);
+      if (!documentType) throw new UserFacingError("ไม่พบประเภทเอกสาร");
+
+      const ordered = [...documents].sort(
+        (a, b) => a.uploadedAt.getTime() - b.uploadedAt.getTime() || a.id.localeCompare(b.id),
+      );
+      const bytes = await buildMultiWorkbook(
+        documentType,
+        ordered.map((d) => ({ fileName: d.fileName, data: d.extractedData! })),
+      );
+      return { fileName: `${documentType.name}_${ordered.length}ใบ.xlsx`, bytes };
     },
 
     // Removes Documents together with their stored files. Safe to call for ids
