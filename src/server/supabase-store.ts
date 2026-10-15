@@ -13,8 +13,11 @@ import type { ClaimedDocument, FieldInput, NewDocument, Store, UploadTarget } fr
 const BUCKET = "documents";
 const SIGNED_URL_SECONDS = 60 * 60;
 
+// The list never loads extracted_data (it is the bulk of the payload); the open
+// flag count is kept in its own column instead.
 const DOCUMENT_COLUMNS =
-  "id, file_name, mime_type, storage_path, page_count, document_type_id, status, failure_reason, extracted_data, uploaded_at, document_types!documents_document_type_id_fkey(name)";
+  "id, file_name, mime_type, storage_path, page_count, document_type_id, status, failure_reason, open_flag_count, uploaded_at, document_types!documents_document_type_id_fkey(name)";
+const DOCUMENT_DETAIL_COLUMNS = DOCUMENT_COLUMNS + ", extracted_data";
 
 type DocumentRow = {
   id: string;
@@ -25,7 +28,8 @@ type DocumentRow = {
   document_type_id: string | null;
   status: ExtractionStatus;
   failure_reason: string | null;
-  extracted_data: ExtractedData | null;
+  open_flag_count: number;
+  extracted_data?: ExtractedData | null;
   uploaded_at: string;
   document_types: { name: string } | null;
 };
@@ -62,7 +66,7 @@ function toSummary(row: DocumentRow): DocumentSummary {
     documentTypeName: row.document_types?.name ?? null,
     status: row.status,
     failureReason: row.failure_reason,
-    openReviewFlagCount: countOpenFlags(row.extracted_data),
+    openReviewFlagCount: row.open_flag_count,
     uploadedAt: new Date(row.uploaded_at),
   };
 }
@@ -119,7 +123,7 @@ export class SupabaseStore implements Store {
   async getDocument(id: string) {
     const { data, error } = await this.db
       .from("documents")
-      .select(DOCUMENT_COLUMNS)
+      .select(DOCUMENT_DETAIL_COLUMNS)
       .eq("id", id)
       .maybeSingle<DocumentRow>();
     if (error) throw error;
@@ -127,7 +131,7 @@ export class SupabaseStore implements Store {
     return {
       ...toSummary(data),
       pageCount: data.page_count,
-      extractedData: data.extracted_data,
+      extractedData: data.extracted_data ?? null,
     };
   }
 
@@ -248,6 +252,7 @@ export class SupabaseStore implements Store {
         document_type_id: input.documentTypeId,
         status: "done",
         extracted_data: input.extractedData,
+        open_flag_count: countOpenFlags(input.extractedData),
         is_demo_seed: true,
         uploaded_at: input.uploadedAt.toISOString(),
       })
@@ -391,6 +396,7 @@ export class SupabaseStore implements Store {
       .update({
         status: "done",
         extracted_data: data,
+        open_flag_count: countOpenFlags(data),
         failure_reason: null,
         extracting_since: null,
       })
@@ -425,7 +431,7 @@ export class SupabaseStore implements Store {
   async saveExtractedData(id: string, data: ExtractedData): Promise<boolean> {
     const { data: rows, error } = await this.db
       .from("documents")
-      .update({ extracted_data: data })
+      .update({ extracted_data: data, open_flag_count: countOpenFlags(data) })
       .eq("id", id)
       .eq("status", "done")
       .select("id");
@@ -450,6 +456,7 @@ export class SupabaseStore implements Store {
         document_type_id: documentTypeId,
         requested_document_type_id: documentTypeId,
         extracted_data: null,
+        open_flag_count: 0,
         failure_reason: null,
         attempt_count: 0,
         next_attempt_at: null,

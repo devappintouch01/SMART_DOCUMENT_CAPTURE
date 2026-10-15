@@ -29,3 +29,14 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), sans-serif;
 }
+
+/* Tailwind 4 leaves buttons with the plain arrow cursor; anything that can be
+   clicked should show the hand. Disabled controls keep their own cursor. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  input[type="checkbox"]:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+}
