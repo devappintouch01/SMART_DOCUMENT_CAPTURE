@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { canSelect, selectAllIds, selectionTypeId } from "@/domain/selection";
+import { canSelect, selectAllIds } from "@/domain/selection";
 import type { DocumentListItem } from "@/domain/types";
 import { deleteDocuments } from "./actions";
+import { recallPicked, rememberPicked, type Picked } from "./selection-memory";
 import { StatusBadge } from "./status-badge";
 
 // th-TH uses the Buddhist Era; the year must be written out in full (2569).
@@ -38,46 +39,61 @@ function Thumbnail({ document }: { document: DocumentListItem }) {
 }
 
 export function ResultList({ documents, offset }: { documents: DocumentListItem[]; offset: number }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [picked, setPickedState] = useState<Record<string, Picked>>(recallPicked);
+  const setPicked = (next: Record<string, Picked>) => {
+    rememberPicked(next);
+    setPickedState(next);
+  };
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  // Only Documents still on screen count as selected (a delete can remove rows
-  // underneath a selection).
-  const visibleIds = useMemo(() => new Set(documents.map((d) => d.id)), [documents]);
-  const chosen = useMemo(() => [...selected].filter((id) => visibleIds.has(id)), [selected, visibleIds]);
+  const chosen = useMemo(() => Object.keys(picked), [picked]);
 
   // Everything ticked shares one Document Type, so once a row is ticked the
   // rows of other types stay visible but cannot be ticked. A Document that has
   // no type yet can never be ticked.
-  const lockedTypeId = selectionTypeId(documents, chosen);
-  const lockedTypeName = documents.find((d) => d.documentTypeId === lockedTypeId)?.documentTypeName ?? null;
+  const first = chosen.length > 0 ? picked[chosen[0]] : null;
+  const lockedTypeId = first?.documentTypeId ?? null;
+  const lockedTypeName = first?.documentTypeName ?? null;
+  // "Select all" works on the rows of this page.
   const allIds = selectAllIds(documents, lockedTypeId);
-  const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));
+  const allSelected = allIds.length > 0 && allIds.every((id) => id in picked);
+  const chosenHere = documents.filter((d) => d.id in picked).length;
 
   // Excel export needs finished Documents; say what is wrong instead of just
   // greying the button out.
   const exportProblem = useMemo(() => {
-    const picked = documents.filter((d) => chosen.includes(d.id));
-    const notDone = picked.filter((d) => d.status !== "done").length;
+    const notDone = Object.values(picked).filter((p) => p.status !== "done").length;
     return notDone > 0 ? `ยังมี ${notDone} ใบที่อ่านไม่เสร็จหรือล้มเหลว ส่งออกได้เฉพาะใบที่เสร็จแล้ว` : null;
-  }, [documents, chosen]);
+  }, [picked]);
 
-  const toggle = (id: string) =>
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const entryOf = (d: DocumentListItem): Picked => ({
+    documentTypeId: d.documentTypeId,
+    documentTypeName: d.documentTypeName,
+    status: d.status,
+  });
+
+  const toggle = (document: DocumentListItem) => {
+    const next = { ...picked };
+    if (document.id in next) delete next[document.id];
+    else next[document.id] = entryOf(document);
+    setPicked(next);
+  };
+
+  function toggleAll() {
+    const next = { ...picked };
+    for (const id of allIds) delete next[id];
+    if (!allSelected) for (const d of documents) if (allIds.includes(d.id)) next[d.id] = entryOf(d);
+    setPicked(next);
+  }
 
   function remove() {
     startTransition(async () => {
       const result = await deleteDocuments(chosen);
       setError(result.error);
       if (!result.error) {
-        setSelected(new Set());
+        setPicked({});
         setConfirming(false);
       }
     });
@@ -95,18 +111,18 @@ export function ResultList({ documents, offset }: { documents: DocumentListItem[
             type="checkbox"
             checked={allSelected}
             disabled={allIds.length === 0}
-            onChange={() => setSelected(allSelected ? new Set() : new Set(allIds))}
+            onChange={toggleAll}
             className="h-4 w-4 accent-primary disabled:opacity-40"
           />
           เลือกทั้งหมด
         </label>
         <span className="text-neutral-500">
-          {hasSelection ? `เลือกแล้ว ${chosen.length} ใบ${lockedTypeName ? ` (${lockedTypeName})` : ""}` : "ยังไม่ได้เลือก"}
+          {hasSelection ? `เลือกแล้ว ${chosen.length} ใบ${lockedTypeName ? ` (${lockedTypeName})` : ""}${chosen.length !== chosenHere ? ` · ในหน้านี้ ${chosenHere}` : ""}` : "ยังไม่ได้เลือก"}
         </span>
         {hasSelection && (
           <button
             type="button"
-            onClick={() => setSelected(new Set())}
+            onClick={() => setPicked({})}
             className="text-primary underline-offset-2 hover:underline"
           >
             ยกเลิกการเลือก
@@ -177,9 +193,9 @@ export function ResultList({ documents, offset }: { documents: DocumentListItem[
               ) : (
                 <input
                   type="checkbox"
-                  checked={selected.has(document.id)}
+                  checked={document.id in picked}
                   disabled={!selectable}
-                  onChange={() => toggle(document.id)}
+                  onChange={() => toggle(document)}
                   aria-label={`เลือก ${document.fileName}`}
                   title={reason}
                   className="mx-4 h-4 w-4 shrink-0 accent-primary disabled:cursor-not-allowed disabled:opacity-40"
