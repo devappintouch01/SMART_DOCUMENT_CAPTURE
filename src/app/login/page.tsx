@@ -16,7 +16,7 @@ export default function LoginPage() {
         </p>
         <LoginForm />
       </div>
-      <p className="text-xs text-neutral-400">powered by App Intouch {new Date().getFullYear()}</p>
+      <p className="text-xs text-neutral-400">powered by <span className="font-medium text-primary">App Intouch</span> {new Date().getFullYear()}</p>
     </main>
   );
 }
