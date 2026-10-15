@@ -157,7 +157,11 @@ export function ResultList({ documents, offset }: { documents: DocumentListItem[
                 ? `เลือกได้เฉพาะประเภท "${lockedTypeName}" เหมือนที่เลือกไว้`
                 : undefined;
           return (
-            <li key={document.id} className="flex items-center">
+            // Once something is ticked, rows that cannot be added are greyed out (still openable).
+            <li
+              key={document.id}
+              className={`flex items-center ${hasSelection && !selectable ? "bg-neutral-100 opacity-50" : ""}`}
+            >
               {document.documentTypeId === null ? (
                 // No type, so nothing to export: no checkbox, but the column stays aligned.
                 <span className="mx-4 h-4 w-4 shrink-0" title={reason} aria-hidden="true" />
