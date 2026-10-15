@@ -189,7 +189,7 @@ export function UploadForm({ documentTypes }: Props) {
           if (event.key === "Enter" || event.key === " ") input.current?.click();
         }}
         className={`cursor-pointer rounded-xl border-2 border-dashed p-12 text-center transition-colors ${
-          dragging ? "border-blue-600 bg-blue-50" : "border-black/20 bg-white hover:border-blue-400"
+          dragging ? "border-primary bg-primary-soft" : "border-black/20 bg-white hover:border-primary"
         }`}
       >
         <p className="font-medium">ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</p>
@@ -234,7 +234,7 @@ export function UploadForm({ documentTypes }: Props) {
                 {entry.status === "uploading" && (
                   <div className="h-2 overflow-hidden rounded-full bg-black/10">
                     <div
-                      className="h-full bg-blue-600 transition-all"
+                      className="h-full bg-primary transition-all"
                       style={{ width: `${Math.round(entry.progress * 100)}%` }}
                     />
                   </div>
@@ -262,7 +262,7 @@ export function UploadForm({ documentTypes }: Props) {
           type="button"
           onClick={() => void upload()}
           disabled={busy || readyCount === 0}
-          className="rounded-md bg-blue-600 px-5 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md bg-primary px-5 py-2 font-medium text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "กำลังอัปโหลด…" : readyCount > 0 ? `อัปโหลด ${readyCount} ไฟล์` : "อัปโหลด"}
         </button>

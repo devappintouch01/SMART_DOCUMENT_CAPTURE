@@ -4,10 +4,10 @@
 
 **Blocked by:** 06
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Copy button beside every value
-- [ ] "Copy header" and "copy line items" put tab-separated text with a header row of Field names on the clipboard
-- [ ] The single-Document workbook has a "ข้อมูลหลัก" sheet (Field name, value) and a "รายการ" sheet (one row per Line Item, columns in Field order)
-- [ ] Date values are real Excel date cells; Amounts are numeric cells formatted `#,##0.00`
-- [ ] Service tests read the workbook back and check sheet names, cell types and that Corrections are used, and check the TSV output
+- [x] Copy button beside every value
+- [x] "Copy header" and "copy line items" put tab-separated text with a header row of Field names on the clipboard
+- [x] The single-Document workbook has a "ข้อมูลหลัก" sheet (Field name, value) and a "รายการ" sheet (one row per Line Item, columns in Field order)
+- [x] Date values are real Excel date cells; Amounts are numeric cells formatted `#,##0.00`
+- [x] Service tests read the workbook back and check sheet names, cell types and that Corrections are used, and check the TSV output

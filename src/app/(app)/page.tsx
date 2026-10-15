@@ -49,7 +49,7 @@ export default async function ResultListPage() {
         <h1 className="text-2xl font-semibold">รายการเอกสาร</h1>
         <Link
           href="/upload"
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover"
         >
           อัปโหลดเอกสาร
         </Link>

@@ -5,8 +5,10 @@ import { useMemo, useState, useTransition } from "react";
 import type { CorrectionInput, FlagTarget } from "@/domain/corrections";
 import type { ExtractedData, ExtractedValue } from "@/domain/extracted-data";
 import { formatDateBE, parseThaiDate } from "@/domain/format";
+import { copyValue, headerTsv, lineItemsTsv } from "@/domain/tabular";
 import type { Field } from "@/domain/types";
 import { confirmReviewFlags, saveCorrections } from "./actions";
+import { CopyButton } from "./copy-button";
 
 type Props = {
   documentId: string;
@@ -33,7 +35,7 @@ function toStored(field: Field, text: string): { value: string; problem: string 
 }
 
 const inputBase =
-  "w-full rounded-md border bg-white px-2 py-1 text-sm outline-none focus:border-blue-600";
+  "w-full rounded-md border bg-white px-2 py-1 text-sm outline-none focus:border-primary";
 
 function Cell({
   field,
@@ -54,6 +56,7 @@ function Cell({
   const numeric = field.kind === "amount" || field.kind === "number";
   return (
     <div>
+      <div className="flex items-center gap-1.5">
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -64,6 +67,15 @@ function Cell({
           flagged ? "border-amber-400 bg-amber-50" : "border-black/15"
         } ${entry?.corrected ? "font-medium text-blue-800" : ""}`}
       />
+      <CopyButton
+        label={`คัดลอก ${field.name}`}
+        compact
+        getText={() => {
+          const iso = field.kind === "date" ? parseThaiDate(value) : null;
+          return field.kind === "date" ? copyValue("date", iso) || value : value.trim();
+        }}
+      />
+      </div>
       {flagged && (
         <p className="mt-0.5 flex items-center gap-2 text-xs text-amber-800">
           <span>⚠ {entry?.flag?.reason}</span>
@@ -153,7 +165,7 @@ export function ResultEditor({ documentId, headerFields, lineFields, data }: Pro
           type="button"
           onClick={save}
           disabled={pending || !dirty}
-          className="rounded-md bg-blue-600 px-4 py-1.5 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md bg-primary px-4 py-1.5 font-medium text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {pending ? "กำลังบันทึก…" : "บันทึกการแก้ไข"}
         </button>
@@ -174,6 +186,30 @@ export function ResultEditor({ documentId, headerFields, lineFields, data }: Pro
         <span className={dirty ? "text-amber-700" : "text-neutral-500"}>
           {dirty ? "มีการแก้ไขที่ยังไม่ได้บันทึก" : "ค่าที่แก้ไขแล้วแสดงเป็นสีน้ำเงิน"}
         </span>
+        <CopyButton
+          label="คัดลอกข้อมูลหลัก"
+          disabled={dirty}
+          title={dirty ? "บันทึกการแก้ไขก่อน" : "วางลง Excel ได้ทันที"}
+          getText={() => headerTsv([...headerFields, ...lineFields], data)}
+        />
+        {lineFields.length > 0 && (
+          <CopyButton
+            label="คัดลอกรายการ"
+            disabled={dirty}
+            title={dirty ? "บันทึกการแก้ไขก่อน" : "วางลง Excel ได้ทันที"}
+            getText={() => lineItemsTsv([...headerFields, ...lineFields], data)}
+          />
+        )}
+        <a
+          href={dirty ? undefined : `/api/documents/${documentId}/export`}
+          aria-disabled={dirty}
+          title={dirty ? "บันทึกการแก้ไขก่อน" : undefined}
+          className={`rounded-md border border-green-600 px-3 py-1.5 font-medium text-green-800 ${
+            dirty ? "pointer-events-none opacity-50" : "hover:bg-green-50"
+          }`}
+        >
+          ดาวน์โหลด Excel
+        </a>
         {openFlags.length > 0 && (
           <button
             type="button"
@@ -279,7 +315,7 @@ export function ResultEditor({ documentId, headerFields, lineFields, data }: Pro
                   },
                 ])
               }
-              className="text-sm text-blue-700 hover:underline"
+              className="text-sm text-primary hover:underline"
             >
               + เพิ่มแถว
             </button>

@@ -11,6 +11,13 @@
   --foreground: #171717;
 }
 
+/* Brand colour. Change it here and every primary button, link and focus ring follows. */
+@theme {
+  --color-primary: #cb212a;
+  --color-primary-hover: #a81b22;
+  --color-primary-soft: #fbeaeb;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

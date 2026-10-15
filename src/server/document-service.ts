@@ -18,6 +18,7 @@ import {
   validateFileMeta,
   type FileMeta,
 } from "@/domain/upload-limits";
+import { buildDocumentWorkbook } from "./excel";
 import {
   AiReaderError,
   type AiReader,
@@ -95,10 +96,10 @@ export function createDocumentService(deps: {
     await store.requeueExtraction(id, new Date(now().getTime() + delay));
   }
 
-  async function loadDone(id: string) {
+  async function loadDone(id: string, action = "แก้ไข") {
     const document = await store.getDocument(id);
     if (!document || document.status !== "done" || !document.extractedData) {
-      throw new UserFacingError("แก้ไขได้เฉพาะเอกสารที่อ่านเสร็จแล้ว");
+      throw new UserFacingError(`${action}ได้เฉพาะเอกสารที่อ่านเสร็จแล้ว`);
     }
     const documentType = (await store.listDocumentTypes()).find((t) => t.id === document.documentTypeId);
     if (!documentType) throw new UserFacingError("ไม่พบประเภทเอกสาร");
@@ -172,6 +173,14 @@ export function createDocumentService(deps: {
       const result = applyCorrections(document.extractedData!, documentType.fields, input);
       if (!result.ok) throw new UserFacingError(result.problems.join("\n"));
       await store.saveExtractedData(id, result.data);
+    },
+
+    // The Document as an Excel workbook, using Corrections where there are any.
+    async exportDocument(id: string): Promise<{ fileName: string; bytes: Uint8Array }> {
+      const { document, documentType } = await loadDone(id, "ส่งออก");
+      const bytes = await buildDocumentWorkbook(documentType, document.extractedData!);
+      const baseName = document.fileName.replace(/\.[^.]+$/, "") || "export";
+      return { fileName: `${baseName}.xlsx`, bytes };
     },
 
     // Marks Review Flags as checked without changing the values.

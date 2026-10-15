@@ -6,7 +6,7 @@ import { login, type LoginState } from "./actions";
 const initialState: LoginState = { error: null };
 
 const inputClass =
-  "mt-1 w-full rounded-md border border-black/15 bg-transparent px-3 py-2 outline-none focus:border-blue-600";
+  "mt-1 w-full rounded-md border border-black/15 bg-transparent px-3 py-2 outline-none focus:border-primary";
 
 export function LoginForm() {
   const [state, formAction, pending] = useActionState(login, initialState);
@@ -35,7 +35,7 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-md bg-blue-600 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+        className="w-full rounded-md bg-primary py-2 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
       >
         {pending ? "กำลังเข้าสู่ระบบ…" : "เข้าสู่ระบบ"}
       </button>
