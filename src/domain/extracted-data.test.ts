@@ -68,3 +68,21 @@ describe("formatValue", () => {
     expect(formatValue("text", null)).toBe("");
   });
 });
+
+describe("formatNumericInput", () => {
+  it("shows separators, and two decimals for money, but only for plain numbers", async () => {
+    const { formatNumericInput } = await import("./format");
+    expect(formatNumericInput("amount", "250000")).toBe("250,000.00");
+    expect(formatNumericInput("amount", "58411.21")).toBe("58,411.21");
+    expect(formatNumericInput("amount", "1,070")).toBe("1,070.00");
+    expect(formatNumericInput("number", "1500")).toBe("1,500");
+    expect(formatNumericInput("number", "0.25")).toBe("0.25");
+    // Half-typed or unreadable input is left exactly as typed.
+    expect(formatNumericInput("amount", "12.")).toBe("12.");
+    expect(formatNumericInput("amount", "abc")).toBe("abc");
+    expect(formatNumericInput("amount", "")).toBe("");
+    // Other kinds are untouched.
+    expect(formatNumericInput("text", "250000")).toBe("250000");
+    expect(formatNumericInput("date", "2026-10-15")).toBe("2026-10-15");
+  });
+});

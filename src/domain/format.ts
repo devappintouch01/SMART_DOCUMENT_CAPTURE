@@ -36,6 +36,16 @@ export function parseThaiDate(text: string): string | null {
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+// What a number or amount input shows while it is not being edited: thousands
+// separators, and two decimals for money. Text that is not a plain number (a
+// half-typed value) is shown as typed.
+export function formatNumericInput(kind: FieldKind, text: string): string {
+  if (kind !== "amount" && kind !== "number") return text;
+  const plain = text.replace(/,/g, "").trim();
+  if (!/^-?\d+(\.\d+)?$/.test(plain)) return text;
+  return formatValue(kind, plain);
+}
+
 export function formatValue(kind: FieldKind, value: string | null): string {
   if (value === null || value === "") return "";
   switch (kind) {

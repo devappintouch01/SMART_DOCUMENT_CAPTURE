@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useLayoutEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import type { CorrectionInput, FlagTarget } from "@/domain/corrections";
 import type { ExtractedData, ExtractedValue } from "@/domain/extracted-data";
-import { formatDateBE, parseThaiDate } from "@/domain/format";
+import { formatDateBE, formatNumericInput, parseThaiDate } from "@/domain/format";
 import { copyValue, headerTsv, lineItemsTsv } from "@/domain/tabular";
 import type { Field } from "@/domain/types";
 import { confirmReviewFlags, saveCorrections } from "./actions";
@@ -108,6 +108,9 @@ function Cell({
 }) {
   const flagged = entry?.flag?.status === "open";
   const numeric = field.kind === "amount" || field.kind === "number";
+  // Numbers read with separators (250,000.00) until the user clicks in to edit,
+  // when they become plain digits; the stored value is always the plain one.
+  const [focused, setFocused] = useState(false);
   const className = `${inputBase} ${numeric ? "text-right tabular-nums" : ""} ${
     flagged ? "border-amber-400 bg-amber-50" : "border-black/15"
   } ${entry?.corrected ? "font-medium text-blue-800" : ""}`;
@@ -120,8 +123,10 @@ function Cell({
         <AutoTextarea value={value} onChange={onChange} label={field.name} className={className} />
       ) : (
         <input
-          value={value}
+          value={numeric && !focused ? formatNumericInput(field.kind, value) : value}
           onChange={(event) => onChange(event.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           inputMode={numeric ? "decimal" : undefined}
           placeholder={field.kind === "date" ? "วว/ดด/ปปปป" : undefined}
           aria-label={field.name}
