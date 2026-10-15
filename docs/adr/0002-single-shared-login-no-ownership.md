@@ -1,0 +1,3 @@
+# One shared login, no document ownership
+
+The proof of concept has a single login whose username and password come from the `ADMIN_USERNAME` and `ADMIN_PASSWORD` environment variables. Everyone who signs in sees every Document and Document Type, so nothing in the data model records who uploaded or owns what. We chose this over Supabase Auth with per-user accounts because the app exists to be presented, and real accounts would add sign-up and per-user data access rules without improving the demo. Moving to per-user accounts later means adding an owner to existing records and deciding what to do with data uploaded before that change.
