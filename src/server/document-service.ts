@@ -94,7 +94,7 @@ function fixtureData(fixture: DemoFixture, type: DocumentType): ExtractedData {
 // The AI's draft, tidied so the editor never starts with blank, duplicate or
 // out-of-range fields.
 function cleanProposal(proposal: DocumentTypeProposal): DocumentTypeProposal {
-  const kinds = ["text", "number", "date", "amount"];
+  const kinds = ["text", "long_text", "number", "date", "amount"];
   const seen = new Set<string>();
   const fields: FieldInput[] = [];
   for (const field of proposal.fields) {

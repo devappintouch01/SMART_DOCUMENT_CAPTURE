@@ -19,7 +19,8 @@ export const DEFAULT_CLASSIFICATION_MODEL = "claude-haiku-5-5";
 const CLASSIFY_SYSTEM_PROMPT = `You sort scanned and photographed Thai business documents into the Document Types you are given. Pick the one Document Type this document is. Each Document Type is described by its name and the fields it records; a document matches when it is that kind of document, whatever its layout or vendor. A combined "ใบกำกับภาษี/ใบเสร็จรับเงิน" is a tax invoice when a Tax Invoice type is offered. If none of the Document Types fits, answer "none". Give a short reason in Thai.`;
 
 const KIND_HINTS: Record<FieldKind, string> = {
-  text: "text exactly as written on the document",
+  text: "text exactly as written on the document, on one line",
+  long_text: "text exactly as written, which may span several lines; keep each line break as a newline character",
   number: "a plain number such as 12 or 3.5, without separators or units",
   amount: "a plain decimal money amount such as 1070.00, without commas, currency or the word บาท",
   date: "an ISO date YYYY-MM-DD in the Gregorian (Common Era) calendar",
@@ -167,7 +168,7 @@ Rules:
 - name: the kind of document in Thai as people call it, for example "ใบวางบิล" or "ใบสั่งซื้อ". Not the vendor or the file name.
 - Header fields are values that appear once on the document (document number, dates, parties, tax IDs, totals, notes). Line item fields are the columns of the item table, one value per row. If the document has no item table, give no line item fields.
 - Use the field names as printed on the document, in Thai where the document is Thai. Keep them short.
-- kind is one of: text (words, codes, ids, phone numbers, tax ids), number (quantities), date, amount (money). Tax ids and phone numbers are text, not number.
+- kind is one of: text (short words, codes, ids, names, phone numbers, tax ids), long_text (values that run over several lines: notes and remarks, addresses, long item descriptions, payment terms), number (quantities), date, amount (money). Tax ids and phone numbers are text, not number. Use long_text only where the document actually shows several lines.
 - description: one short Thai sentence saying exactly which value to read, especially where the document shows several similar values (for example which of the totals). Mention the unit or format when it matters.
 - Aim for the fields an accountant would actually copy into a spreadsheet: usually 6-15 header fields and 3-8 line item fields. Do not invent fields that are not on the document.`;
 
@@ -181,7 +182,7 @@ const proposeSchema = {
         type: "object",
         properties: {
           name: { type: "string" },
-          kind: { type: "string", enum: ["text", "number", "date", "amount"] },
+          kind: { type: "string", enum: ["text", "long_text", "number", "date", "amount"] },
           description: { type: "string" },
         },
         required: ["name", "kind", "description"],
@@ -194,7 +195,7 @@ const proposeSchema = {
         type: "object",
         properties: {
           name: { type: "string" },
-          kind: { type: "string", enum: ["text", "number", "date", "amount"] },
+          kind: { type: "string", enum: ["text", "long_text", "number", "date", "amount"] },
           description: { type: "string" },
         },
         required: ["name", "kind", "description"],

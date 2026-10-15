@@ -1,6 +1,8 @@
 // Domain vocabulary follows CONTEXT.md.
 
-export type FieldKind = "text" | "number" | "date" | "amount";
+// "long_text" is text that can span several lines (notes, addresses); the
+// result page gives it a box that grows, where "text" is a one-line input.
+export type FieldKind = "text" | "long_text" | "number" | "date" | "amount";
 
 export type FieldScope = "header" | "line_item";
 

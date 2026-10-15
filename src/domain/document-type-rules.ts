@@ -5,6 +5,7 @@ import type { FieldKind } from "./types";
 
 export const FIELD_KINDS: { kind: FieldKind; label: string }[] = [
   { kind: "text", label: "ข้อความ" },
+  { kind: "long_text", label: "ข้อความยาว (หลายบรรทัด)" },
   { kind: "number", label: "ตัวเลข" },
   { kind: "date", label: "วันที่" },
   { kind: "amount", label: "จำนวนเงิน" },

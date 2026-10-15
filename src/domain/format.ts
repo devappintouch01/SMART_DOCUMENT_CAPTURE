@@ -46,6 +46,7 @@ export function formatValue(kind: FieldKind, value: string | null): string {
     case "number":
       return numberFormat.format(Number(value));
     case "text":
+    case "long_text":
       return value;
   }
 }

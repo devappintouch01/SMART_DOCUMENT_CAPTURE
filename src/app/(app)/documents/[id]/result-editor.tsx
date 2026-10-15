@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { CorrectionInput, FlagTarget } from "@/domain/corrections";
 import type { ExtractedData, ExtractedValue } from "@/domain/extracted-data";
 import { formatDateBE, parseThaiDate } from "@/domain/format";
@@ -37,6 +37,40 @@ function toStored(field: Field, text: string): { value: string; problem: string 
 const inputBase =
   "w-full rounded-md border bg-white px-2 py-1 text-sm outline-none focus:border-primary";
 
+// Looks like the one-line input for short text and grows to show everything
+// when the text is long or has line breaks.
+function AutoTextarea({
+  value,
+  onChange,
+  label,
+  className,
+}: {
+  value: string;
+  onChange: (text: string) => void;
+  label: string;
+  className: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      aria-label={label}
+      className={`${className} resize-none overflow-hidden leading-snug`}
+    />
+  );
+}
+
 function Cell({
   field,
   value,
@@ -54,19 +88,26 @@ function Cell({
 }) {
   const flagged = entry?.flag?.status === "open";
   const numeric = field.kind === "amount" || field.kind === "number";
+  const className = `${inputBase} ${numeric ? "text-right tabular-nums" : ""} ${
+    flagged ? "border-amber-400 bg-amber-50" : "border-black/15"
+  } ${entry?.corrected ? "font-medium text-blue-800" : ""}`;
   return (
     <div>
-      <div className="flex items-center gap-1.5">
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        inputMode={numeric ? "decimal" : undefined}
-        placeholder={field.kind === "date" ? "วว/ดด/ปปปป" : undefined}
-        aria-label={field.name}
-        className={`${inputBase} ${numeric ? "text-right tabular-nums" : ""} ${
-          flagged ? "border-amber-400 bg-amber-50" : "border-black/15"
-        } ${entry?.corrected ? "font-medium text-blue-800" : ""}`}
-      />
+      <div className="flex items-start gap-1.5">
+      {field.kind === "long_text" ? (
+        // A long-text Field (chosen when the Document Type was set up) can run
+        // over several lines, so it gets a box that grows with its content.
+        <AutoTextarea value={value} onChange={onChange} label={field.name} className={className} />
+      ) : (
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          inputMode={numeric ? "decimal" : undefined}
+          placeholder={field.kind === "date" ? "วว/ดด/ปปปป" : undefined}
+          aria-label={field.name}
+          className={className}
+        />
+      )}
       <CopyButton
         label={`คัดลอก ${field.name}`}
         compact

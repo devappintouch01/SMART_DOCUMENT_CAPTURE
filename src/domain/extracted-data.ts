@@ -62,6 +62,9 @@ export function normalizeValue(
   switch (kind) {
     case "text":
       return { value: text, problem: null };
+    case "long_text":
+      // Line breaks are the point of this kind; only normalise their style.
+      return { value: text.replace(/\r\n?/g, "\n"), problem: null };
     case "number": {
       const n = cleanNumber(text);
       return n === null

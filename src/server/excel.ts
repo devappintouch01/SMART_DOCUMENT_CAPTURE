@@ -5,7 +5,15 @@ import type { DocumentType, Field, FieldKind } from "@/domain/types";
 export const HEADER_SHEET = "ข้อมูลหลัก";
 export const LINE_ITEMS_SHEET = "รายการ";
 
-type Cell = { value: ExcelJS.CellValue; numFmt?: string };
+type Cell = { value: ExcelJS.CellValue; numFmt?: string; wrap?: boolean };
+
+// Writes a converted value into a worksheet cell, with its number format and,
+// for long text, line wrapping so every line shows inside the cell.
+function setCell(cell: ExcelJS.Cell, converted: Cell) {
+  cell.value = converted.value;
+  if (converted.numFmt) cell.numFmt = converted.numFmt;
+  if (converted.wrap) cell.alignment = { wrapText: true, vertical: "top" };
+}
 
 // Stored values become real Excel values: dates and money are never text.
 // The date format is Excel's built-in short date (mm-dd-yy → id 14), which
@@ -23,6 +31,8 @@ export function toCell(kind: FieldKind, value: string | null): Cell {
       return { value: Number(value), numFmt: "General" };
     case "text":
       return { value };
+    case "long_text":
+      return { value, wrap: true };
   }
 }
 
@@ -60,11 +70,12 @@ export async function buildDocumentWorkbook(
   styleHeaderRow(header.addRow(["ช่อง", "ค่า"]));
   for (const field of documentType.fields.filter((f) => f.scope === "header")) {
     const row = header.addRow([field.name]);
-    const { value, numFmt } = toCell(field.kind, data.header[field.id]?.value ?? null);
     const cell = row.getCell(2);
-    cell.value = value;
-    if (numFmt) cell.numFmt = numFmt;
-    cell.alignment = { horizontal: "left" };
+    const converted = toCell(field.kind, data.header[field.id]?.value ?? null);
+    setCell(cell, converted);
+    cell.alignment = converted.wrap
+      ? { wrapText: true, vertical: "top", horizontal: "left" }
+      : { horizontal: "left" };
   }
   fitColumns(header);
 
@@ -75,10 +86,7 @@ export async function buildDocumentWorkbook(
   for (const item of data.lineItems) {
     const row = lines.addRow([]);
     lineFields.forEach((field, index) => {
-      const { value, numFmt } = toCell(field.kind, item[field.id]?.value ?? null);
-      const cell = row.getCell(index + 1);
-      cell.value = value;
-      if (numFmt) cell.numFmt = numFmt;
+      setCell(row.getCell(index + 1), toCell(field.kind, item[field.id]?.value ?? null));
     });
   }
   fitColumns(lines);
@@ -103,10 +111,7 @@ export async function buildMultiWorkbook(
 
   const writeValues = (row: ExcelJS.Row, fields: Field[], values: Record<string, { value: string | null }>) => {
     fields.forEach((field, index) => {
-      const { value, numFmt } = toCell(field.kind, values[field.id]?.value ?? null);
-      const cell = row.getCell(leading.length + index + 1);
-      cell.value = value;
-      if (numFmt) cell.numFmt = numFmt;
+      setCell(row.getCell(leading.length + index + 1), toCell(field.kind, values[field.id]?.value ?? null));
     });
   };
 
