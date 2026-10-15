@@ -104,6 +104,13 @@ export class InMemoryStore implements Store {
     return bytes;
   }
 
+  async deleteDocuments(ids: string[]): Promise<number> {
+    const doomed = this.documents.filter((d) => ids.includes(d.id));
+    for (const d of doomed) this.files.delete(d.storagePath);
+    this.documents = this.documents.filter((d) => !ids.includes(d.id));
+    return doomed.length;
+  }
+
   async claimQueuedDocuments(maxConcurrent: number): Promise<ClaimedDocument[]> {
     const extracting = this.documents.filter((d) => d.status === "extracting").length;
     const slots = maxConcurrent - extracting;

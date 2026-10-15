@@ -8,6 +8,7 @@ import {
 } from "@/domain/extracted-data";
 import type {
   DocumentDetail,
+  DocumentFilter,
   DocumentListItem,
   DocumentType,
   FieldScope,
@@ -183,6 +184,13 @@ export function createDocumentService(deps: {
       return { fileName: `${baseName}.xlsx`, bytes };
     },
 
+    // Removes Documents together with their stored files. Safe to call for ids
+    // that are already gone.
+    async deleteDocuments(ids: string[]): Promise<{ deleted: number }> {
+      if (ids.length === 0) throw new UserFacingError("ยังไม่ได้เลือกเอกสาร");
+      return { deleted: await store.deleteDocuments(ids) };
+    },
+
     // Marks Review Flags as checked without changing the values.
     async confirmReviewFlags(id: string, targets: FlagTarget[]): Promise<void> {
       const { document } = await loadDone(id);
@@ -209,10 +217,13 @@ export function createDocumentService(deps: {
       return store.listDocumentTypes();
     },
 
-    async listDocuments(): Promise<DocumentListItem[]> {
-      const documents = [...(await store.listDocuments())].sort(
-        (a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime(),
-      );
+    async listDocuments(filter: DocumentFilter = {}): Promise<DocumentListItem[]> {
+      const search = filter.search?.trim().normalize("NFC").toLowerCase();
+      const documents = [...(await store.listDocuments())]
+        .filter((d) => !filter.documentTypeId || d.documentTypeId === filter.documentTypeId)
+        .filter((d) => !filter.status || d.status === filter.status)
+        .filter((d) => !search || d.fileName.normalize("NFC").toLowerCase().includes(search))
+        .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
       const imagePaths = documents
         .filter((d) => d.mimeType.startsWith("image/"))
         .map((d) => d.storagePath);

@@ -1,45 +1,33 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import type { DocumentListItem } from "@/domain/types";
+import type { DocumentFilter, ExtractionStatus } from "@/domain/types";
 import { getDocumentService } from "@/server/container";
 import { AutoRefresh } from "./auto-refresh";
-import { StatusBadge } from "./status-badge";
+import { ListFilters } from "./list-filters";
+import { ResultList } from "./result-list";
 
 export const metadata: Metadata = { title: "รายการเอกสาร" };
 export const dynamic = "force-dynamic";
 
-// th-TH uses the Buddhist Era; the year must be written out in full (2569).
-const uploadedAtFormat = new Intl.DateTimeFormat("th-TH", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-  timeZone: "Asia/Bangkok",
-});
+const STATUSES: ExtractionStatus[] = ["queued", "extracting", "done", "failed"];
 
-function Thumbnail({ document }: { document: DocumentListItem }) {
-  if (document.previewUrl) {
-    return (
-      // Short-lived signed URL from Storage, so next/image has nothing to optimise.
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={document.previewUrl}
-        alt=""
-        className="h-12 w-12 rounded-md border border-black/10 object-cover"
-      />
-    );
-  }
-  return (
-    <span className="flex h-12 w-12 items-center justify-center rounded-md border border-black/10 bg-red-50 text-xs font-semibold text-red-700">
-      PDF
-    </span>
-  );
-}
+const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 
-export default async function ResultListPage() {
-  const documents = await getDocumentService().listDocuments();
+export default async function ResultListPage({ searchParams }: PageProps<"/">) {
+  const params = await searchParams;
+  const status = first(params.status);
+  const filter: DocumentFilter = {
+    documentTypeId: first(params.type) || undefined,
+    status: STATUSES.find((s) => s === status),
+    search: first(params.q) || undefined,
+  };
+  const filtered = Boolean(filter.documentTypeId || filter.status || filter.search);
+
+  const service = getDocumentService();
+  const [documents, documentTypes] = await Promise.all([
+    service.listDocuments(filter),
+    service.listDocumentTypes(),
+  ]);
   const working = documents.some((d) => d.status === "queued" || d.status === "extracting");
 
   return (
@@ -55,42 +43,19 @@ export default async function ResultListPage() {
         </Link>
       </div>
 
+      <ListFilters documentTypes={documentTypes.map((t) => ({ id: t.id, name: t.name }))} />
+
       {documents.length === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-black/15 bg-white p-12 text-center">
-          <p className="font-medium">ยังไม่มีเอกสาร</p>
+          <p className="font-medium">{filtered ? "ไม่พบเอกสารที่ตรงกับตัวกรอง" : "ยังไม่มีเอกสาร"}</p>
           <p className="mt-1 text-sm text-neutral-500">
-            อัปโหลดใบเสร็จ ใบกำกับภาษี หรือใบเบิกสินค้า แล้ว AI จะถอดข้อมูลให้
+            {filtered
+              ? "ลองเปลี่ยนคำค้นหา หรือกด ล้างตัวกรอง"
+              : "อัปโหลดใบเสร็จ ใบกำกับภาษี หรือใบเบิกสินค้า แล้ว AI จะถอดข้อมูลให้"}
           </p>
         </div>
       ) : (
-        <ul className="mt-6 divide-y divide-black/10 rounded-xl border border-black/10 bg-white">
-          {documents.map((document) => (
-            <li key={document.id}>
-              <Link
-                href={`/documents/${document.id}`}
-                className="flex items-center gap-4 px-4 py-3 text-sm hover:bg-neutral-50"
-              >
-              <Thumbnail document={document} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{document.fileName}</p>
-                <p className="text-neutral-500">{document.documentTypeName ?? "ยังไม่ระบุประเภท"}</p>
-                {document.status === "failed" && document.failureReason && (
-                  <p className="truncate text-red-700">{document.failureReason}</p>
-                )}
-              </div>
-              <StatusBadge status={document.status} reason={document.failureReason} />
-              {document.openReviewFlagCount > 0 && (
-                <span className="text-xs text-amber-700" title="ช่องที่ควรตรวจ">
-                  ⚠ {document.openReviewFlagCount}
-                </span>
-              )}
-              <span className="hidden w-36 text-right text-neutral-500 sm:block">
-                {uploadedAtFormat.format(document.uploadedAt)}
-              </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <ResultList documents={documents} />
       )}
     </section>
   );

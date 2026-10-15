@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getDocumentService } from "@/server/container";
 import { AutoRefresh } from "../../auto-refresh";
 import { StatusBadge } from "../../status-badge";
+import { DeleteButton } from "./delete-button";
 import { OriginalViewer } from "./original-viewer";
 import { RerunPanel } from "./rerun-panel";
 import { ResultEditor } from "./result-editor";
@@ -38,6 +39,9 @@ export default async function DocumentDetailPage({ params }: PageProps<"/documen
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold break-all">{document.fileName}</h1>
         <StatusBadge status={document.status} reason={document.failureReason} />
+        <span className="ml-auto">
+          <DeleteButton documentId={document.id} />
+        </span>
       </div>
       <p className="mt-1 text-sm text-neutral-500">
         {document.documentType?.name ?? "ยังไม่ระบุประเภท"}

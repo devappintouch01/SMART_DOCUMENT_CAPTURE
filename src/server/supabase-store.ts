@@ -176,6 +176,26 @@ export class SupabaseStore implements Store {
     return new Uint8Array(await data.arrayBuffer());
   }
 
+  async deleteDocuments(ids: string[]): Promise<number> {
+    const { data: rows, error: findError } = await this.db
+      .from("documents")
+      .select("id, storage_path")
+      .in("id", ids);
+    if (findError) throw findError;
+    if (rows.length === 0) return 0;
+
+    const found = rows.map((r) => r.id as string);
+    const { error } = await this.db.from("documents").delete().in("id", found);
+    if (error) throw error;
+
+    const { error: storageError } = await this.db.storage
+      .from(BUCKET)
+      .remove(rows.map((r) => r.storage_path as string));
+    // The rows are already gone; an orphaned file is harmless, so only log it.
+    if (storageError) console.error("could not remove stored files", storageError);
+    return found.length;
+  }
+
   async claimQueuedDocuments(maxConcurrent: number): Promise<ClaimedDocument[]> {
     const { data, error } = await this.db.rpc("claim_documents", {
       max_concurrent: maxConcurrent,

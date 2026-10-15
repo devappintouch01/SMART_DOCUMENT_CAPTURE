@@ -47,3 +47,11 @@ export type DocumentDetail = DocumentSummary & {
   // Short-lived URL for viewing the original file.
   fileUrl: string | null;
 };
+
+// What the result list narrows down to; every part is optional and they combine.
+export type DocumentFilter = {
+  documentTypeId?: string;
+  status?: ExtractionStatus;
+  // Case-insensitive part of the file name.
+  search?: string;
+};

@@ -4,8 +4,8 @@
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Filters for Document Type and status, and file-name search, combine correctly
-- [ ] Multi-select delete and single delete remove the Document rows and their Storage objects after confirmation
-- [ ] Service tests cover the filter combinations and that deletion removes files
+- [x] Filters for Document Type and status, and file-name search, combine correctly
+- [x] Multi-select delete and single delete remove the Document rows and their Storage objects after confirmation
+- [x] Service tests cover the filter combinations and that deletion removes files

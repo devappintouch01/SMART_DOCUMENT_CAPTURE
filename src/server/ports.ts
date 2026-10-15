@@ -35,6 +35,9 @@ export interface Store {
   // Short-lived URLs for viewing stored files, keyed by storage path.
   createSignedUrls(storagePaths: string[]): Promise<Record<string, string>>;
   downloadFile(storagePath: string): Promise<Uint8Array>;
+  // Removes the Documents and their stored files; returns how many Documents
+  // existed.
+  deleteDocuments(ids: string[]): Promise<number>;
   // Atomically moves Queued Documents to Extracting while fewer than
   // maxConcurrent are Extracting, and returns the ones it moved.
   claimQueuedDocuments(maxConcurrent: number): Promise<ClaimedDocument[]>;
