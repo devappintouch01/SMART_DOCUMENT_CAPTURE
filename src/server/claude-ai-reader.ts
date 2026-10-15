@@ -141,7 +141,28 @@ export function toReaderError(error: unknown): AiReaderError {
   return new AiReaderError(false, "เกิดข้อผิดพลาดระหว่างเรียก AI", { cause: error });
 }
 
-function responseText(response: Anthropic.Beta.BetaMessage): string {
+// USD per million tokens (input, output) for the models this app uses, from the
+// published price list. Only for the estimate in the log line; billing is the
+// source of truth.
+const PRICE_PER_MTOK: Record<string, [input: number, output: number]> = {
+  "claude-opus-5-5": [4, 20],
+  "claude-haiku-5-5": [0.1, 0.5],
+};
+
+// One log line per AI call: what it cost in tokens and roughly in dollars, so a
+// month's spend can be added up from the logs (search for "[ai-usage]").
+function logUsage(operation: string, response: Anthropic.Beta.BetaMessage) {
+  const input = response.usage.input_tokens;
+  const output = response.usage.output_tokens;
+  const price = PRICE_PER_MTOK[response.model];
+  const usd = price ? (input * price[0] + output * price[1]) / 1_000_000 : null;
+  console.info(
+    `[ai-usage] ${JSON.stringify({ operation, model: response.model, inputTokens: input, outputTokens: output, estimatedUsd: usd === null ? null : Number(usd.toFixed(5)) })}`,
+  );
+}
+
+function responseText(response: Anthropic.Beta.BetaMessage, operation: string): string {
+  logUsage(operation, response);
   if (response.stop_reason === "refusal") {
     throw new AiReaderError(false, "AI ปฏิเสธการอ่านเอกสารนี้");
   }
@@ -242,7 +263,7 @@ export class ClaudeAiReader implements AiReader {
       throw toReaderError(error);
     }
 
-    const output = parseJson<ProposalOutput>(responseText(response));
+    const output = parseJson<ProposalOutput>(responseText(response, "propose"));
     const toField = (scope: FieldScope) => (f: ProposalOutput["header_fields"][number]) => ({
       scope,
       name: f.name,
@@ -308,7 +329,7 @@ export class ClaudeAiReader implements AiReader {
       throw toReaderError(error);
     }
 
-    const output = parseJson<{ document_type: string; reason: string }>(responseText(response));
+    const output = parseJson<{ document_type: string; reason: string }>(responseText(response, "classify"));
     const index = keys.indexOf(output.document_type);
     return {
       documentTypeId: index >= 0 ? documentTypes[index].id : null,
@@ -345,7 +366,7 @@ export class ClaudeAiReader implements AiReader {
       throw toReaderError(error);
     }
 
-    const output = parseJson<ModelOutput>(responseText(response));
+    const output = parseJson<ModelOutput>(responseText(response, "extract"));
 
     if (!output.readable) {
       return { kind: "unreadable", reason: output.unreadable_reason || "อ่านเอกสารไม่ได้" };
