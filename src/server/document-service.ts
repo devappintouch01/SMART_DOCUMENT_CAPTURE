@@ -47,6 +47,7 @@ export type RegisteredFile = {
   fileName: string;
   mimeType: string;
   pageCount: number;
+  contentHash?: string | null;
 };
 
 export const DEFAULT_EXTRACTION_CONCURRENCY = 4;
@@ -576,9 +577,18 @@ export function createDocumentService(deps: {
           pageCount: file.pageCount,
           requestedDocumentTypeId: typeId,
           documentTypeId: typeId,
+          contentHash: file.contentHash ?? null,
         })),
       );
       return { documentIds };
+    },
+
+    // Which of these files (by content hash) are already in the system.
+    async findDuplicates(hashes: string[]): Promise<Record<string, { id: string; fileName: string }>> {
+      const found = await store.findDocumentsByHash([...new Set(hashes)].slice(0, 100));
+      const result: Record<string, { id: string; fileName: string }> = {};
+      for (const match of found) result[match.contentHash] ??= { id: match.id, fileName: match.fileName };
+      return result;
     },
 
     // Runs Extractions until nothing claimable is left. Safe to call from

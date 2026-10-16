@@ -18,6 +18,7 @@ export type StoredDocument = {
   extractingSince: Date | null;
   extractedData: ExtractedData | null;
   uploadedAt: Date;
+  contentHash?: string | null;
 };
 
 export class InMemoryStore implements Store {
@@ -92,6 +93,12 @@ export class InMemoryStore implements Store {
 
   async insertDocuments(documents: NewDocument[]): Promise<string[]> {
     return documents.map((doc) => this.addDocument({ ...doc }).id);
+  }
+
+  async findDocumentsByHash(hashes: string[]) {
+    return this.documents
+      .filter((d) => d.contentHash && hashes.includes(d.contentHash))
+      .map((d) => ({ contentHash: d.contentHash as string, id: d.id, fileName: d.fileName }));
   }
 
   async createSignedUrls(storagePaths: string[]): Promise<Record<string, string>> {

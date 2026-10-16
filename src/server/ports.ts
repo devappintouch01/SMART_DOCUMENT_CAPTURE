@@ -20,6 +20,8 @@ export type NewDocument = {
   pageCount: number;
   requestedDocumentTypeId: string | null;
   documentTypeId: string | null;
+  // SHA-256 (hex) of the file bytes; lets the upload page spot a file already stored.
+  contentHash?: string | null;
 };
 
 // A Document that was just moved to Extracting and is ours to work on.
@@ -38,6 +40,8 @@ export interface Store {
   getDocument(id: string): Promise<Omit<DocumentDetail, "documentType" | "fileUrl"> | null>;
   createUploadTarget(storagePath: string): Promise<UploadTarget>;
   insertDocuments(documents: NewDocument[]): Promise<string[]>;
+  // Documents already stored with one of these content hashes (first match per hash).
+  findDocumentsByHash(hashes: string[]): Promise<{ contentHash: string; id: string; fileName: string }[]>;
   // Short-lived URLs for viewing stored files, keyed by storage path.
   createSignedUrls(storagePaths: string[]): Promise<Record<string, string>>;
   downloadFile(storagePath: string): Promise<Uint8Array>;

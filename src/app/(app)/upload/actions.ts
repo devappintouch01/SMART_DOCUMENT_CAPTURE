@@ -27,6 +27,19 @@ export async function requestUploads(files: FileMeta[]): Promise<RequestUploadsR
   }
 }
 
+// Which picked files (by SHA-256) are already stored; the page marks them as duplicates.
+export async function findDuplicates(
+  hashes: string[],
+): Promise<Record<string, { id: string; fileName: string }>> {
+  try {
+    return await getDocumentService().findDuplicates(hashes);
+  } catch (error) {
+    console.error(error);
+    // Duplicate detection is a convenience; never block uploading because of it.
+    return {};
+  }
+}
+
 export async function registerUploads(input: {
   documentTypeId: string;
   files: RegisteredFile[];

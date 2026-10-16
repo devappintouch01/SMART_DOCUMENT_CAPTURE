@@ -12,6 +12,14 @@ export async function convertHeicToJpeg(file: File): Promise<File> {
   return new File([blob], heicToJpegName(file.name), { type: "image/jpeg", lastModified: file.lastModified });
 }
 
+// SHA-256 of the file bytes as hex, or null where the browser has no Web Crypto
+// (it needs https or localhost).
+export async function hashFile(file: File): Promise<string | null> {
+  if (!globalThis.crypto?.subtle) return null;
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export async function readPageCount(file: File, mimeType: string): Promise<number> {
   if (mimeType !== "application/pdf") return 1;
 

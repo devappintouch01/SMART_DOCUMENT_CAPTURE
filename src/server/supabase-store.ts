@@ -154,11 +154,27 @@ export class SupabaseStore implements Store {
           page_count: doc.pageCount,
           requested_document_type_id: doc.requestedDocumentTypeId,
           document_type_id: doc.documentTypeId,
+          content_hash: doc.contentHash ?? null,
         })),
       )
       .select("id");
     if (error) throw error;
     return data.map((row) => row.id as string);
+  }
+
+  async findDocumentsByHash(hashes: string[]) {
+    if (hashes.length === 0) return [];
+    const { data, error } = await this.db
+      .from("documents")
+      .select("id, file_name, content_hash")
+      .in("content_hash", hashes)
+      .order("uploaded_at", { ascending: true });
+    if (error) throw error;
+    return data.map((row) => ({
+      contentHash: row.content_hash as string,
+      id: row.id as string,
+      fileName: row.file_name as string,
+    }));
   }
 
   async createSignedUrls(storagePaths: string[]): Promise<Record<string, string>> {

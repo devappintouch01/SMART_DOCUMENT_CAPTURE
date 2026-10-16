@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { isHeic, MAX_FILES_PER_BATCH } from "@/domain/upload-limits";
 import { Select } from "@/components/select";
-import { prepareFile, uploadToSignedUrl } from "@/lib/browser-upload";
-import { registerUploads, requestUploads } from "./actions";
+import { hashFile, prepareFile, uploadToSignedUrl } from "@/lib/browser-upload";
+import { findDuplicates, registerUploads, requestUploads } from "./actions";
 
 type Props = { documentTypes: { id: string; name: string }[] };
 
@@ -15,8 +15,13 @@ type Entry = {
   file: File;
   mimeType: string;
   pageCount: number;
-  // "ready" → waiting to upload; "failed" can be retried
-  status: "ready" | "uploading" | "done" | "failed" | "rejected";
+  // SHA-256 of the file bytes (null when the browser cannot compute it).
+  hash: string | null;
+  // "ready" → waiting to upload; "failed" can be retried; "duplicate" is skipped
+  // unless the person chooses to upload it anyway.
+  status: "ready" | "uploading" | "done" | "failed" | "rejected" | "duplicate";
+  // Why it counts as a duplicate (kept after "upload anyway" as a note).
+  duplicateNote: string | null;
   progress: number;
   message: string | null;
 };
@@ -48,7 +53,8 @@ export function UploadForm({ documentTypes }: Props) {
   async function addFiles(fileList: FileList | File[]) {
     setNotice(null);
     const incoming = Array.from(fileList);
-    const room = MAX_FILES_PER_BATCH - entries.filter((e) => e.status !== "rejected").length;
+    const room =
+      MAX_FILES_PER_BATCH - entries.filter((e) => e.status !== "rejected" && e.status !== "duplicate").length;
     if (incoming.length > room) {
       setNotice(`อัปโหลดได้ครั้งละไม่เกิน ${MAX_FILES_PER_BATCH} ไฟล์ จึงเพิ่มได้อีก ${Math.max(room, 0)} ไฟล์`);
     }
@@ -64,12 +70,32 @@ export function UploadForm({ documentTypes }: Props) {
         file,
         mimeType,
         pageCount,
+        hash: problem ? null : await hashFile(file),
         status: problem ? "rejected" : "ready",
+        duplicateNote: null,
         progress: 0,
         message: problem,
       });
     }
     setConverting(false);
+
+    // Same content twice: in this list already, or stored in the system before.
+    const seen = new Map(entries.filter((e) => e.hash && e.status !== "rejected").map((e) => [e.hash as string, e.file.name]));
+    const hashes = added.flatMap((e) => (e.hash ? [e.hash] : []));
+    const stored = hashes.length > 0 ? await findDuplicates(hashes) : {};
+    for (const entry of added) {
+      if (!entry.hash || entry.status === "rejected") continue;
+      const inList = seen.get(entry.hash);
+      const inSystem = stored[entry.hash];
+      if (inList || inSystem) {
+        entry.status = "duplicate";
+        entry.duplicateNote = inList
+          ? `ไฟล์นี้ซ้ำกับ ${inList} ที่เลือกไว้ในรายการนี้`
+          : `มีไฟล์นี้อยู่ในระบบแล้ว (${inSystem.fileName})`;
+      } else {
+        seen.set(entry.hash, entry.file.name);
+      }
+    }
     setEntries((current) => [...current, ...added]);
   }
 
@@ -123,6 +149,7 @@ export function UploadForm({ documentTypes }: Props) {
           fileName: entry.file.name,
           mimeType: entry.mimeType,
           pageCount: entry.pageCount,
+          contentHash: entry.hash,
         })),
       });
       if (!registered.ok) {
@@ -140,6 +167,10 @@ export function UploadForm({ documentTypes }: Props) {
   }
 
   const readyCount = entries.filter((e) => e.status === "ready" || e.status === "failed").length;
+  const duplicateCount = entries.filter((e) => e.status === "duplicate").length;
+  const rejectedCount = entries.filter((e) => e.status === "rejected").length;
+  const counted = entries.length - duplicateCount - rejectedCount;
+  const doneCount = entries.filter((e) => e.status === "done").length;
 
   return (
     <div className="mt-6 space-y-5">
@@ -204,6 +235,18 @@ export function UploadForm({ documentTypes }: Props) {
       )}
 
       {entries.length > 0 && (
+        <p className="text-sm text-neutral-600" aria-live="polite">
+          <span className="font-medium text-foreground">
+            {counted}/{MAX_FILES_PER_BATCH}
+          </span>{" "}
+          ไฟล์ที่จะอัปโหลด
+          {busy && counted > 0 && ` · อัปโหลดแล้ว ${doneCount}/${counted}`}
+          {duplicateCount > 0 && <span className="text-amber-700"> · ซ้ำ {duplicateCount}</span>}
+          {rejectedCount > 0 && <span className="text-red-600"> · ใช้ไม่ได้ {rejectedCount}</span>}
+        </p>
+      )}
+
+      {entries.length > 0 && (
         <ul className="divide-y divide-black/10 rounded-xl border border-black/10 bg-white">
           {entries.map((entry) => (
             <li key={entry.key} className="flex items-center gap-4 px-4 py-3 text-sm">
@@ -216,6 +259,7 @@ export function UploadForm({ documentTypes }: Props) {
                     : ""}
                 </p>
                 {entry.message && <p className="mt-0.5 text-red-600">{entry.message}</p>}
+                {entry.duplicateNote && <p className="mt-0.5 text-amber-700">{entry.duplicateNote}</p>}
               </div>
               <div className="w-40 shrink-0 text-right">
                 {entry.status === "uploading" && (
@@ -228,6 +272,16 @@ export function UploadForm({ documentTypes }: Props) {
                 )}
                 {entry.status === "done" && <span className="text-green-700">อัปโหลดแล้ว</span>}
                 {entry.status === "ready" && <span className="text-neutral-500">พร้อมอัปโหลด</span>}
+                {entry.status === "duplicate" && (
+                  <button
+                    type="button"
+                    disabled={busy || counted >= MAX_FILES_PER_BATCH}
+                    onClick={() => patch(entry.key, { status: "ready" })}
+                    className="rounded-md border border-amber-400 px-2 py-1 text-amber-800 hover:bg-amber-50 disabled:opacity-50"
+                  >
+                    อัปโหลดซ้ำ
+                  </button>
+                )}
               </div>
               {!busy && entry.status !== "done" && (
                 <button
@@ -251,7 +305,7 @@ export function UploadForm({ documentTypes }: Props) {
           disabled={busy || readyCount === 0}
           className="rounded-md bg-primary px-5 py-2 font-medium text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {busy ? "กำลังอัปโหลด…" : readyCount > 0 ? `อัปโหลด ${readyCount} ไฟล์` : "อัปโหลด"}
+          {busy ? `กำลังอัปโหลด… ${doneCount}/${counted}` : readyCount > 0 ? `อัปโหลด ${readyCount} ไฟล์` : "อัปโหลด"}
         </button>
         <Link href="/" className="text-sm text-neutral-500 hover:text-foreground">
           ไปที่รายการเอกสาร

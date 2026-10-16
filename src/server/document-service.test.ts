@@ -134,6 +134,33 @@ describe("registerUploads", () => {
   });
 });
 
+describe("duplicate files", () => {
+  const file = (name: string, hash: string | null) => ({
+    storagePath: `${name}.pdf`,
+    fileName: `${name}.pdf`,
+    mimeType: "application/pdf",
+    pageCount: 1,
+    contentHash: hash,
+  });
+
+  it("finds files whose content is already stored, whatever they are now called", async () => {
+    const { service } = setup();
+    await service.registerUploads({ documentTypeId: taxInvoice.id, files: [file("first", "aaa"), file("second", "bbb")] });
+
+    const found = await service.findDuplicates(["aaa", "zzz"]);
+
+    expect(Object.keys(found)).toEqual(["aaa"]);
+    expect(found.aaa.fileName).toBe("first.pdf");
+  });
+
+  it("finds nothing for files uploaded without a hash", async () => {
+    const { service } = setup();
+    await service.registerUploads({ documentTypeId: taxInvoice.id, files: [file("old", null)] });
+
+    expect(await service.findDuplicates(["aaa"])).toEqual({});
+  });
+});
+
 describe("seeded Document Types", () => {
   it("define the Fields listed in the spec", async () => {
     const { service } = setup();
