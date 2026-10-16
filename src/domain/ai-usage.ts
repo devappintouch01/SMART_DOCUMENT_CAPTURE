@@ -51,6 +51,29 @@ export type ModelUsage = {
 const average = (values: number[]) =>
   values.length === 0 ? null : values.reduce((sum, v) => sum + v, 0) / values.length;
 
+// What the superadmin sees on a result list row: what reading the Document cost
+// in total and which model did the reading (the latest successful extract call,
+// else the latest call of any kind).
+export type DocumentAiSummary = { costUsd: number | null; model: string | null };
+
+export function summarizeByDocument(calls: AiCall[]): Record<string, DocumentAiSummary> {
+  const byDocument = new Map<string, AiCall[]>();
+  for (const call of calls) {
+    if (call.documentId) byDocument.set(call.documentId, [...(byDocument.get(call.documentId) ?? []), call]);
+  }
+  const result: Record<string, DocumentAiSummary> = {};
+  for (const [documentId, group] of byDocument) {
+    const newestFirst = [...group].sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+    const reader = newestFirst.find((c) => c.operation === "extract" && c.status === "ok") ?? newestFirst[0];
+    const measured = group.filter((c) => c.costUsd !== null);
+    result[documentId] = {
+      costUsd: measured.length > 0 ? measured.reduce((sum, c) => sum + (c.costUsd ?? 0), 0) : null,
+      model: reader?.model ?? null,
+    };
+  }
+  return result;
+}
+
 // Average cost of reading one Document across every model, counting only
 // Documents with a measured cost. Null when nothing has been measured yet.
 export function averageCostPerDocument(calls: AiCall[]): number | null {

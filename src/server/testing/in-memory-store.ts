@@ -316,13 +316,7 @@ export class InMemoryStore implements Store {
     this.settings.set(key, value);
   }
 
-  async sumAiCostByDocument(documentIds: string[]): Promise<Record<string, number>> {
-    const totals: Record<string, number> = {};
-    for (const call of this.aiCalls) {
-      if (call.documentId && call.costUsd !== null && documentIds.includes(call.documentId)) {
-        totals[call.documentId] = (totals[call.documentId] ?? 0) + call.costUsd;
-      }
-    }
-    return totals;
+  async listAiCallsForDocuments(documentIds: string[]): Promise<AiCall[]> {
+    return this.aiCalls.filter((c) => c.documentId && documentIds.includes(c.documentId));
   }
 }

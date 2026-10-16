@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { EXTRACTION_MODEL_SETTING, isExtractionModel } from "@/domain/ai-models";
 import { resolveExtractionModel, type ModelChoice } from "./ai-settings";
-import { averageCostPerDocument, summarizeAiCalls, type AiCall, type ModelUsage } from "@/domain/ai-usage";
+import {
+  averageCostPerDocument,
+  summarizeAiCalls,
+  summarizeByDocument,
+  type AiCall,
+  type DocumentAiSummary,
+  type ModelUsage,
+} from "@/domain/ai-usage";
 import { applyCorrections, confirmFlags, type CorrectionInput, type FlagTarget } from "@/domain/corrections";
 import {
   toExtractedValue,
@@ -542,10 +549,10 @@ export function createDocumentService(deps: {
 
     // --- superadmin only: callers must check the role before using these ---
 
-    // What each of these Documents cost to read in total (USD); the result list
-    // shows it to the superadmin.
-    async getDocumentCosts(documentIds: string[]): Promise<Record<string, number>> {
-      return store.sumAiCostByDocument(documentIds);
+    // What each of these Documents cost to read in total and which model read
+    // it; the result list shows it to the superadmin.
+    async getDocumentAiSummaries(documentIds: string[]): Promise<Record<string, DocumentAiSummary>> {
+      return summarizeByDocument(await store.listAiCallsForDocuments(documentIds));
     },
 
     // The model reading Documents now, and whether it was picked in the app.

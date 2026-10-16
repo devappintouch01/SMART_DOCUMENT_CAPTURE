@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { averageCostPerDocument, summarizeAiCalls, toBaht, type AiCall } from "./ai-usage";
+import { averageCostPerDocument, summarizeAiCalls, summarizeByDocument, toBaht, type AiCall } from "./ai-usage";
 
 const call = (overrides: Partial<AiCall>): AiCall => ({
   id: crypto.randomUUID(),
@@ -76,6 +76,33 @@ describe("averageCostPerDocument", () => {
 
     expect(averageCostPerDocument(calls)).toBeCloseTo(0.045);
     expect(averageCostPerDocument([])).toBeNull();
+  });
+});
+
+describe("summarizeByDocument", () => {
+  it("gives the total cost and the model that did the reading", () => {
+    const summary = summarizeByDocument([
+      call({ documentId: "d1", operation: "classify", model: "haiku", costUsd: 0.001, startedAt: new Date("2026-10-16T00:00:00Z") }),
+      call({ documentId: "d1", operation: "extract", model: "opus", costUsd: 0.05, startedAt: new Date("2026-10-16T00:00:05Z") }),
+    ]);
+
+    expect(summary.d1.costUsd).toBeCloseTo(0.051);
+    expect(summary.d1.model).toBe("opus");
+  });
+
+  it("names the latest model after a re-read with another model", () => {
+    const summary = summarizeByDocument([
+      call({ documentId: "d1", model: "opus", startedAt: new Date("2026-10-16T00:00:00Z") }),
+      call({ documentId: "d1", model: "haiku", startedAt: new Date("2026-10-17T00:00:00Z") }),
+    ]);
+
+    expect(summary.d1.model).toBe("haiku");
+  });
+
+  it("knows the model of a legacy Document but not its cost", () => {
+    const summary = summarizeByDocument([call({ documentId: "d1", isLegacy: true, costUsd: null })]);
+
+    expect(summary.d1).toEqual({ costUsd: null, model: "opus" });
   });
 });
 

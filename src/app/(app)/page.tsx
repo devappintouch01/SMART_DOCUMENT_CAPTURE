@@ -36,9 +36,9 @@ export default async function ResultListPage({ searchParams }: PageProps<"/">) {
     service.listDocumentTypes(),
   ]);
   const documents = result.items;
-  // Cost per Document is for the superadmin only; nobody else's request reads it.
-  const costs =
-    (await getRole()) === "superadmin" ? await service.getDocumentCosts(documents.map((d) => d.id)) : undefined;
+  // Cost and model per Document are for the superadmin only; nobody else's request reads them.
+  const aiInfo =
+    (await getRole()) === "superadmin" ? await service.getDocumentAiSummaries(documents.map((d) => d.id)) : undefined;
   const working = documents.some((d) => d.status === "queued" || d.status === "extracting");
 
   return (
@@ -72,7 +72,7 @@ export default async function ResultListPage({ searchParams }: PageProps<"/">) {
             key={JSON.stringify([result.page, sizeParam, filter])}
             documents={documents}
             offset={result.offset}
-            costs={costs}
+            aiInfo={aiInfo}
           />
           <Pagination
             page={result.page}

@@ -588,19 +588,14 @@ export class SupabaseStore implements Store {
     if (error) throw error;
   }
 
-  async sumAiCostByDocument(documentIds: string[]): Promise<Record<string, number>> {
-    if (documentIds.length === 0) return {};
+  async listAiCallsForDocuments(documentIds: string[]): Promise<AiCall[]> {
+    if (documentIds.length === 0) return [];
     const { data, error } = await this.db
       .from("ai_calls")
-      .select("document_id, cost_usd")
+      .select(AI_CALL_COLUMNS)
       .in("document_id", documentIds)
-      .not("cost_usd", "is", null);
+      .returns<AiCallRow[]>();
     if (error) throw error;
-    const totals: Record<string, number> = {};
-    for (const row of data) {
-      const id = row.document_id as string;
-      totals[id] = (totals[id] ?? 0) + Number(row.cost_usd);
-    }
-    return totals;
+    return data.map(toAiCall);
   }
 }

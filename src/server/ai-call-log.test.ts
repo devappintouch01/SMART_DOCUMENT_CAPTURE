@@ -189,7 +189,7 @@ describe("choosing the reading model", () => {
 });
 
 describe("result list extras", () => {
-  it("adds up what each Document cost, leaving out Documents with no measured cost", async () => {
+  it("gives each Document its total cost and the model that read it", async () => {
     const store = new InMemoryStore();
     const service = createDocumentService({ store, ai: new FakeAiReader(), concurrency: 4 });
     const base = {
@@ -205,11 +205,12 @@ describe("result list extras", () => {
     await store.recordAiCall({ ...base, documentId: "d1", operation: "classify", model: "m", costUsd: 0.01 });
     await store.recordAiCall({ ...base, documentId: "d2", operation: "extract", model: "m", costUsd: null });
 
-    const costs = await service.getDocumentCosts(["d1", "d2", "d3"]);
+    const summaries = await service.getDocumentAiSummaries(["d1", "d2", "d3"]);
 
-    expect(costs.d1).toBeCloseTo(0.06);
-    expect(costs).not.toHaveProperty("d2");
-    expect(costs).not.toHaveProperty("d3");
+    expect(summaries.d1.costUsd).toBeCloseTo(0.06);
+    expect(summaries.d1.model).toBe("m");
+    expect(summaries.d2.costUsd).toBeNull();
+    expect(summaries).not.toHaveProperty("d3");
   });
 
   it("gives every row a link to its original for the hover preview, PDFs included", async () => {

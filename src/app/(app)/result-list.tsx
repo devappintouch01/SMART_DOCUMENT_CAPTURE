@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { canSelect, selectAllIds } from "@/domain/selection";
+import type { DocumentAiSummary } from "@/domain/ai-usage";
 import type { DocumentListItem } from "@/domain/types";
 import { formatBaht } from "./ai-format";
 import { deleteDocuments } from "./actions";
@@ -74,11 +75,11 @@ function HoverPreview({ document, x, y }: { document: DocumentListItem; x: numbe
 type Props = {
   documents: DocumentListItem[];
   offset: number;
-  // Total cost (USD) of reading each Document, by id. Only given to the superadmin.
-  costs?: Record<string, number>;
+  // What reading each Document cost and which model did it, by id. Only given to the superadmin.
+  aiInfo?: Record<string, DocumentAiSummary>;
 };
 
-export function ResultList({ documents, offset, costs }: Props) {
+export function ResultList({ documents, offset, aiInfo }: Props) {
   // Hover preview: wait a moment so passing over a thumbnail does not load the file.
   const [hovered, setHovered] = useState<{ document: DocumentListItem; x: number; y: number } | null>(null);
   const pointer = useRef({ x: 0, y: 0 });
@@ -288,9 +289,13 @@ export function ResultList({ documents, offset, costs }: Props) {
                     ⚠ {document.openReviewFlagCount}
                   </span>
                 )}
-                {costs && (
-                  <span className="w-24 shrink-0 text-right text-xs text-neutral-600" title="ค่าใช้จ่าย AI รวมของเอกสารนี้ (superadmin)">
-                    {formatBaht(costs[document.id] ?? null)}
+                {aiInfo && (
+                  <span
+                    className="w-40 shrink-0 text-right text-xs text-neutral-600"
+                    title="ค่าใช้จ่าย AI รวมของเอกสารนี้ และโมเดลที่ใช้อ่าน (superadmin)"
+                  >
+                    {formatBaht(aiInfo[document.id]?.costUsd ?? null)}
+                    <span className="block truncate text-neutral-400">{aiInfo[document.id]?.model ?? "ไม่ทราบโมเดล"}</span>
                   </span>
                 )}
                 <span className="hidden w-36 text-right text-neutral-500 sm:block">
