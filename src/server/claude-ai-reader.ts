@@ -28,7 +28,7 @@ const KIND_HINTS: Record<FieldKind, string> = {
   date: "an ISO date YYYY-MM-DD in the Gregorian (Common Era) calendar",
 };
 
-const SYSTEM_PROMPT = `You read scanned and photographed Thai business documents (receipts, tax invoices, goods requisitions and similar A4 accounting documents) and return the requested fields as JSON.
+export const SYSTEM_PROMPT = `You read scanned and photographed Thai business documents (receipts, tax invoices, goods requisitions and similar A4 accounting documents) and return the requested fields as JSON.
 
 Rules:
 - Return each field's value as described in its schema description. If a field does not appear on the document, return an empty string for its value.
@@ -53,7 +53,7 @@ const valueSchema = (field: Field) => ({
 
 // Schema keys are short positional names (h0, l0, ...) so field names never
 // have to be valid JSON keys; the description carries the real name.
-function buildSchema(documentType: DocumentType) {
+export function buildSchema(documentType: DocumentType) {
   const header = documentType.fields.filter((f) => f.scope === "header");
   const lines = documentType.fields.filter((f) => f.scope === "line_item");
   const object = (fields: Field[], prefix: string) => ({
@@ -80,15 +80,15 @@ function buildSchema(documentType: DocumentType) {
   };
 }
 
-type ModelValue = { value: string; flag_reason: string };
-type ModelOutput = {
+export type ModelValue = { value: string; flag_reason: string };
+export type ModelOutput = {
   readable: boolean;
   unreadable_reason: string;
   header: Record<string, ModelValue>;
   line_items: Record<string, ModelValue>[];
 };
 
-function mapRow(row: Record<string, ModelValue>, fields: Field[], prefix: string) {
+export function mapRow(row: Record<string, ModelValue>, fields: Field[], prefix: string) {
   const mapped: Record<string, RawValue> = {};
   fields.forEach((field, i) => {
     const item = row[`${prefix}${i}`];
