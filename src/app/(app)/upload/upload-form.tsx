@@ -6,7 +6,7 @@ import { useRef, useState } from "react";
 import { isHeic, MAX_FILES_PER_BATCH } from "@/domain/upload-limits";
 import { Select } from "@/components/select";
 import { hashFile, prepareFile, uploadToSignedUrl } from "@/lib/browser-upload";
-import { findDuplicates, registerUploads, requestUploads } from "./actions";
+import { registerUploads, requestUploads } from "./actions";
 
 type Props = { documentTypes: { id: string; name: string }[] };
 
@@ -15,7 +15,8 @@ type Entry = {
   file: File;
   mimeType: string;
   pageCount: number;
-  // SHA-256 of the file bytes (null when the browser cannot compute it).
+  // SHA-256 of the file bytes, to spot the same file picked twice in one round
+  // (null when the browser cannot compute it).
   hash: string | null;
   // "ready" → waiting to upload; "failed" can be retried; "duplicate" is skipped
   // unless the person chooses to upload it anyway.
@@ -43,6 +44,8 @@ export function UploadForm({ documentTypes }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  // A second click before the first upload has re-rendered must not start another round.
+  const uploading = useRef(false);
   const router = useRouter();
 
   const patch = (key: string, changes: Partial<Entry>) =>
@@ -79,19 +82,16 @@ export function UploadForm({ documentTypes }: Props) {
     }
     setConverting(false);
 
-    // Same content twice: in this list already, or stored in the system before.
+    // The same content already in this round's list (picked twice, or already
+    // uploaded in this round) is skipped. Files stored by earlier rounds are not
+    // checked: uploading one again on purpose is fine.
     const seen = new Map(entries.filter((e) => e.hash && e.status !== "rejected").map((e) => [e.hash as string, e.file.name]));
-    const hashes = added.flatMap((e) => (e.hash ? [e.hash] : []));
-    const stored = hashes.length > 0 ? await findDuplicates(hashes) : {};
     for (const entry of added) {
       if (!entry.hash || entry.status === "rejected") continue;
       const inList = seen.get(entry.hash);
-      const inSystem = stored[entry.hash];
-      if (inList || inSystem) {
+      if (inList) {
         entry.status = "duplicate";
-        entry.duplicateNote = inList
-          ? `ไฟล์นี้ซ้ำกับ ${inList} ที่เลือกไว้ในรายการนี้`
-          : `มีไฟล์นี้อยู่ในระบบแล้ว (${inSystem.fileName})`;
+        entry.duplicateNote = `ไฟล์นี้ซ้ำกับ ${inList} ที่เลือกไว้ในรอบนี้`;
       } else {
         seen.set(entry.hash, entry.file.name);
       }
@@ -101,7 +101,8 @@ export function UploadForm({ documentTypes }: Props) {
 
   async function upload() {
     const pending = entries.filter((e) => e.status === "ready" || e.status === "failed");
-    if (pending.length === 0 || !documentTypeId) return;
+    if (pending.length === 0 || !documentTypeId || uploading.current) return;
+    uploading.current = true;
     setBusy(true);
     setNotice(null);
 
@@ -115,6 +116,7 @@ export function UploadForm({ documentTypes }: Props) {
     );
     if (!requested.ok) {
       setNotice(requested.error);
+      uploading.current = false;
       setBusy(false);
       return;
     }
@@ -149,11 +151,11 @@ export function UploadForm({ documentTypes }: Props) {
           fileName: entry.file.name,
           mimeType: entry.mimeType,
           pageCount: entry.pageCount,
-          contentHash: entry.hash,
         })),
       });
       if (!registered.ok) {
         setNotice(registered.error);
+        uploading.current = false;
         setBusy(false);
         return;
       }
@@ -163,6 +165,7 @@ export function UploadForm({ documentTypes }: Props) {
       }
       setNotice(`อัปโหลดสำเร็จ ${succeeded.length} ไฟล์ ที่เหลือยังไม่สำเร็จ`);
     }
+    uploading.current = false;
     setBusy(false);
   }
 
