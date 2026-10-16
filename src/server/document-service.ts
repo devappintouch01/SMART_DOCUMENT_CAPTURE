@@ -167,11 +167,15 @@ export function createDocumentService(deps: {
       .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
   }
 
-  // Images get a short-lived URL for their thumbnail; PDFs have none.
+  // Short-lived links to the stored files: images use theirs as the thumbnail
+  // (PDFs have none), and every row can open its original for the hover preview.
   async function withPreviews(documents: DocumentSummary[]): Promise<DocumentListItem[]> {
-    const imagePaths = documents.filter((d) => d.mimeType.startsWith("image/")).map((d) => d.storagePath);
-    const urls = imagePaths.length ? await store.createSignedUrls(imagePaths) : {};
-    return documents.map((d) => ({ ...d, previewUrl: urls[d.storagePath] ?? null }));
+    const urls = documents.length ? await store.createSignedUrls(documents.map((d) => d.storagePath)) : {};
+    return documents.map((d) => ({
+      ...d,
+      previewUrl: d.mimeType.startsWith("image/") ? (urls[d.storagePath] ?? null) : null,
+      fileUrl: urls[d.storagePath] ?? null,
+    }));
   }
 
   async function loadDone(id: string, action = "แก้ไข") {
@@ -537,6 +541,12 @@ export function createDocumentService(deps: {
     },
 
     // --- superadmin only: callers must check the role before using these ---
+
+    // What each of these Documents cost to read in total (USD); the result list
+    // shows it to the superadmin.
+    async getDocumentCosts(documentIds: string[]): Promise<Record<string, number>> {
+      return store.sumAiCostByDocument(documentIds);
+    },
 
     // The model reading Documents now, and whether it was picked in the app.
     async getExtractionModel(): Promise<ModelChoice> {

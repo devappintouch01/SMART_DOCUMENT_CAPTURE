@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { canSelect, selectAllIds } from "@/domain/selection";
 import type { DocumentListItem } from "@/domain/types";
+import { formatBaht } from "./ai-format";
 import { deleteDocuments } from "./actions";
 import { recallPicked, rememberPicked, type Picked } from "./selection-memory";
 import { StatusBadge } from "./status-badge";
@@ -38,7 +39,64 @@ function Thumbnail({ document }: { document: DocumentListItem }) {
   );
 }
 
-export function ResultList({ documents, offset }: { documents: DocumentListItem[]; offset: number }) {
+const PREVIEW_WIDTH = 380;
+const PREVIEW_HEIGHT = 500;
+
+// The original file next to the pointer while it rests on a row. Follows the
+// pointer, flips to its left near the right edge, and never takes the hover.
+function HoverPreview({ document, x, y }: { document: DocumentListItem; x: number; y: number }) {
+  if (!document.fileUrl) return null;
+  const left = x + 24 + PREVIEW_WIDTH > window.innerWidth - 12 ? x - 24 - PREVIEW_WIDTH : x + 24;
+  const top = Math.min(Math.max(8, y - PREVIEW_HEIGHT / 3), Math.max(8, window.innerHeight - PREVIEW_HEIGHT - 8));
+  const isPdf = document.mimeType === "application/pdf";
+  return (
+    <div
+      aria-hidden="true"
+      style={{ left, top, width: PREVIEW_WIDTH, height: PREVIEW_HEIGHT }}
+      className="pointer-events-none fixed z-50 overflow-hidden rounded-xl border border-black/15 bg-white shadow-2xl"
+    >
+      {isPdf ? (
+        <iframe
+          src={`${document.fileUrl}#toolbar=0&navpanes=0&view=FitH`}
+          title={`ตัวอย่าง ${document.fileName}`}
+          className="h-full w-full"
+          tabIndex={-1}
+        />
+      ) : (
+        // Short-lived signed URL from Storage, so next/image has nothing to optimise.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={document.fileUrl} alt="" className="h-full w-full object-contain" />
+      )}
+    </div>
+  );
+}
+
+type Props = {
+  documents: DocumentListItem[];
+  offset: number;
+  // Total cost (USD) of reading each Document, by id. Only given to the superadmin.
+  costs?: Record<string, number>;
+};
+
+export function ResultList({ documents, offset, costs }: Props) {
+  // Hover preview: wait a moment so passing over a row does not load the file.
+  const [hovered, setHovered] = useState<{ document: DocumentListItem; x: number; y: number } | null>(null);
+  const pointer = useRef({ x: 0, y: 0 });
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopHover = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    setHovered(null);
+  };
+  const startHover = (document: DocumentListItem) => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setHovered({ document, ...pointer.current }), 350);
+  };
+  const moveHover = (event: React.MouseEvent) => {
+    pointer.current = { x: event.clientX, y: event.clientY };
+    setHovered((current) => (current ? { ...current, ...pointer.current } : current));
+  };
+
   const [picked, setPickedState] = useState<Record<string, Picked>>(recallPicked);
   const setPicked = (next: Record<string, Picked>) => {
     rememberPicked(next);
@@ -185,6 +243,9 @@ export function ResultList({ documents, offset }: { documents: DocumentListItem[
             // Once something is ticked, rows that cannot be added are greyed out (still openable).
             <li
               key={document.id}
+              onMouseEnter={() => startHover(document)}
+              onMouseMove={moveHover}
+              onMouseLeave={stopHover}
               className={`flex items-center ${hasSelection && !selectable ? "bg-neutral-100 opacity-50" : ""}`}
             >
               {document.documentTypeId === null ? (
@@ -222,6 +283,11 @@ export function ResultList({ documents, offset }: { documents: DocumentListItem[
                     ⚠ {document.openReviewFlagCount}
                   </span>
                 )}
+                {costs && (
+                  <span className="w-24 shrink-0 text-right text-xs text-neutral-600" title="ค่าใช้จ่าย AI รวมของเอกสารนี้ (superadmin)">
+                    {formatBaht(costs[document.id] ?? null)}
+                  </span>
+                )}
                 <span className="hidden w-36 text-right text-neutral-500 sm:block">
                   {uploadedAtFormat.format(document.uploadedAt)}
                 </span>
@@ -230,6 +296,7 @@ export function ResultList({ documents, offset }: { documents: DocumentListItem[
           );
         })}
       </ul>
+      {hovered && <HoverPreview document={hovered.document} x={hovered.x} y={hovered.y} />}
     </div>
   );
 }

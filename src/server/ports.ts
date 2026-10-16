@@ -85,6 +85,8 @@ export interface Store {
   recordAiCall(call: NewAiCall): Promise<void>;
   listAiCalls(documentId: string): Promise<AiCall[]>;
   listAllAiCalls(): Promise<AiCall[]>;
+  // Total measured cost (USD) per Document id; Documents with no measured cost are left out.
+  sumAiCostByDocument(documentIds: string[]): Promise<Record<string, number>>;
   // Replaces a Done Document's extracted data (Corrections, confirmed flags).
   saveExtractedData(id: string, data: ExtractedData): Promise<boolean>;
   // Failed → Queued with the attempt count reset; false if it was not Failed.

@@ -187,3 +187,43 @@ describe("choosing the reading model", () => {
     expect(asked).toHaveLength(2);
   });
 });
+
+describe("result list extras", () => {
+  it("adds up what each Document cost, leaving out Documents with no measured cost", async () => {
+    const store = new InMemoryStore();
+    const service = createDocumentService({ store, ai: new FakeAiReader(), concurrency: 4 });
+    const base = {
+      provider: "anthropic",
+      startedAt: new Date(),
+      durationMs: 1,
+      inputTokens: 1,
+      outputTokens: 1,
+      status: "ok" as const,
+      error: null,
+    };
+    await store.recordAiCall({ ...base, documentId: "d1", operation: "extract", model: "m", costUsd: 0.05 });
+    await store.recordAiCall({ ...base, documentId: "d1", operation: "classify", model: "m", costUsd: 0.01 });
+    await store.recordAiCall({ ...base, documentId: "d2", operation: "extract", model: "m", costUsd: null });
+
+    const costs = await service.getDocumentCosts(["d1", "d2", "d3"]);
+
+    expect(costs.d1).toBeCloseTo(0.06);
+    expect(costs).not.toHaveProperty("d2");
+    expect(costs).not.toHaveProperty("d3");
+  });
+
+  it("gives every row a link to its original for the hover preview, PDFs included", async () => {
+    const store = new InMemoryStore();
+    store.addDocument({ storagePath: "a.pdf", mimeType: "application/pdf" });
+    store.addDocument({ storagePath: "b.jpg", mimeType: "image/jpeg" });
+    const service = createDocumentService({ store, ai: new FakeAiReader(), concurrency: 4 });
+
+    const items = await service.listDocuments();
+    const byPath = Object.fromEntries(items.map((d) => [d.storagePath, d]));
+
+    expect(byPath["a.pdf"].fileUrl).toBe("memory://view/a.pdf");
+    expect(byPath["a.pdf"].previewUrl).toBeNull();
+    expect(byPath["b.jpg"].fileUrl).toBe("memory://view/b.jpg");
+    expect(byPath["b.jpg"].previewUrl).toBe("memory://view/b.jpg");
+  });
+});

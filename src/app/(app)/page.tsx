@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { pageSizeFromParam } from "@/domain/paging";
 import type { DocumentFilter, ExtractionStatus } from "@/domain/types";
+import { getRole } from "@/lib/session";
 import { getDocumentService } from "@/server/container";
 import { AutoRefresh } from "./auto-refresh";
 import { ListFilters } from "./list-filters";
@@ -35,6 +36,9 @@ export default async function ResultListPage({ searchParams }: PageProps<"/">) {
     service.listDocumentTypes(),
   ]);
   const documents = result.items;
+  // Cost per Document is for the superadmin only; nobody else's request reads it.
+  const costs =
+    (await getRole()) === "superadmin" ? await service.getDocumentCosts(documents.map((d) => d.id)) : undefined;
   const working = documents.some((d) => d.status === "queued" || d.status === "extracting");
 
   return (
@@ -68,6 +72,7 @@ export default async function ResultListPage({ searchParams }: PageProps<"/">) {
             key={JSON.stringify([result.page, sizeParam, filter])}
             documents={documents}
             offset={result.offset}
+            costs={costs}
           />
           <Pagination
             page={result.page}

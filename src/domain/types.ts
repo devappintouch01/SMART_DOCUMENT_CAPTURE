@@ -39,7 +39,8 @@ export type DocumentSummary = {
 
 // A row on the result list: the summary plus a short-lived image URL for the
 // thumbnail (PDFs have none).
-export type DocumentListItem = DocumentSummary & { previewUrl: string | null };
+// fileUrl opens the original for the hover preview (images and PDFs alike).
+export type DocumentListItem = DocumentSummary & { previewUrl: string | null; fileUrl: string | null };
 
 // Everything the result detail page shows for one Document.
 export type DocumentDetail = DocumentSummary & {

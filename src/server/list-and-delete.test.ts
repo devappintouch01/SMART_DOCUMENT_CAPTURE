@@ -149,7 +149,7 @@ describe("listDocumentsPage", () => {
     expect(none).toMatchObject({ total: 0, page: 1, pageCount: 1, offset: 0, items: [] });
   });
 
-  it("signs thumbnail links only for the images on the requested page", async () => {
+  it("signs links only for the rows on the requested page", async () => {
     const { store, service } = await many(25);
     let signed = 0;
     const original = store.createSignedUrls.bind(store);
@@ -160,7 +160,8 @@ describe("listDocumentsPage", () => {
 
     const page = await service.listDocumentsPage({}, first);
 
-    expect(signed).toBe(page.items.filter((d) => d.mimeType.startsWith("image/")).length);
-    expect(signed).toBeLessThan(13);
+    // One link per row of this page (thumbnail and hover preview), not per document.
+    expect(signed).toBe(page.items.length);
+    expect(signed).toBeLessThan(25);
   });
 });
