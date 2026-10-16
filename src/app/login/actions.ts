@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   createSessionToken,
-  credentialsMatch,
+  matchCredentials,
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
 } from "@/lib/session-token";
@@ -18,11 +18,12 @@ export async function login(
   const username = String(formData.get("username") ?? "");
   const password = String(formData.get("password") ?? "");
 
-  if (!credentialsMatch(username, password)) {
+  const role = matchCredentials(username, password);
+  if (!role) {
     return { error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
   }
 
-  (await cookies()).set(SESSION_COOKIE, createSessionToken(), {
+  (await cookies()).set(SESSION_COOKIE, createSessionToken(role), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

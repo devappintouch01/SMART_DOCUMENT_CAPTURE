@@ -1,10 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
+import { getRole } from "@/lib/session";
 import { logout } from "../login/actions";
 
 const navLink = "py-1 text-sm whitespace-nowrap text-neutral-600 hover:text-foreground";
 
-export default function AppLayout({ children }: LayoutProps<"/">) {
+export default async function AppLayout({ children }: LayoutProps<"/">) {
+  const superAdmin = (await getRole()) === "superadmin";
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-black/10 bg-white">
@@ -41,6 +43,11 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
             <Link href="/document-types" className={navLink}>
               ประเภทเอกสาร
             </Link>
+            {superAdmin && (
+              <Link href="/ai-usage" className={navLink}>
+                การใช้ AI
+              </Link>
+            )}
           </nav>
         </div>
       </header>

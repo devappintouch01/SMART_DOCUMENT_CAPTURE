@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getRole } from "@/lib/session";
 import { getDocumentService } from "@/server/container";
 import { AutoRefresh } from "../../auto-refresh";
 import { StatusBadge } from "../../status-badge";
+import { AiCallPanel } from "./ai-call-panel";
 import { DeleteButton } from "./delete-button";
 import { OriginalViewer } from "./original-viewer";
 import { RerunPanel } from "./rerun-panel";
@@ -23,6 +25,8 @@ export default async function DocumentDetailPage({ params }: PageProps<"/documen
     service.listDocumentTypes(),
   ]);
   if (!document) notFound();
+  // The AI call log is for the superadmin only; nobody else's request reads it.
+  const aiCalls = (await getRole()) === "superadmin" ? await service.getAiCalls(id) : null;
 
   const fields = document.documentType?.fields ?? [];
   const headerFields = fields.filter((f) => f.scope === "header");
@@ -90,6 +94,8 @@ export default async function DocumentDetailPage({ params }: PageProps<"/documen
           <div className="space-y-6">{notices}</div>
         </div>
       )}
+
+      {aiCalls && <AiCallPanel calls={aiCalls} uploadedAt={document.uploadedAt} completedAt={document.completedAt} />}
     </section>
   );
 }

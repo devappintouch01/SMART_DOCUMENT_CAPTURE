@@ -53,6 +53,12 @@
 
 - รายการโมเดลที่อ่านภาพได้บน OpenRouter: https://openrouter.ai/collections/vision-models (ใช้ตรวจขั้นที่ 1)
 
+## ความคืบหน้า
+
+- ขั้น 2 (ตาราง `ai_calls` + บันทึกการเรียกของ Anthropic + คอลัมน์ `completed_at`): เสร็จแล้ว
+- ขั้น 3 (superadmin login): เสร็จแล้ว ตั้ง `SUPERADMIN_USERNAME` / `SUPERADMIN_PASSWORD` ใน .env.local และบน Vercel เพื่อเปิดใช้
+- ขั้น 4 (หน้า `/ai-usage` และแผงการเรียก AI ในหน้ารายละเอียดเอกสาร): เสร็จแล้ว
+
 ## ขั้นตอนที่เสนอ (เรียงตามลำดับ)
 
 1. **ตรวจโมเดลที่จะใช้** ดูข้อมูลของ OpenRouter ว่ารับ PDF/รูป, structured output, ราคาเท่าไหร่ ผลลัพธ์: ตารางความสามารถของแต่ละโมเดล และตัดโมเดลที่ใช้ไม่ได้ออกก่อน
