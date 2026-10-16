@@ -42,7 +42,7 @@ function Thumbnail({ document }: { document: DocumentListItem }) {
 const PREVIEW_WIDTH = 380;
 const PREVIEW_HEIGHT = 500;
 
-// The original file next to the pointer while it rests on a row. Follows the
+// The original file next to the pointer while it rests on a thumbnail. Follows the
 // pointer, flips to its left near the right edge, and never takes the hover.
 function HoverPreview({ document, x, y }: { document: DocumentListItem; x: number; y: number }) {
   if (!document.fileUrl) return null;
@@ -79,7 +79,7 @@ type Props = {
 };
 
 export function ResultList({ documents, offset, costs }: Props) {
-  // Hover preview: wait a moment so passing over a row does not load the file.
+  // Hover preview: wait a moment so passing over a thumbnail does not load the file.
   const [hovered, setHovered] = useState<{ document: DocumentListItem; x: number; y: number } | null>(null);
   const pointer = useRef({ x: 0, y: 0 });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -243,9 +243,6 @@ export function ResultList({ documents, offset, costs }: Props) {
             // Once something is ticked, rows that cannot be added are greyed out (still openable).
             <li
               key={document.id}
-              onMouseEnter={() => startHover(document)}
-              onMouseMove={moveHover}
-              onMouseLeave={stopHover}
               className={`flex items-center ${hasSelection && !selectable ? "bg-neutral-100 opacity-50" : ""}`}
             >
               {document.documentTypeId === null ? (
@@ -269,7 +266,15 @@ export function ResultList({ documents, offset, costs }: Props) {
                 href={`/documents/${document.id}`}
                 className="flex min-w-0 flex-1 items-center gap-4 py-3 pr-4 pl-4 text-sm hover:bg-neutral-50"
               >
-                <Thumbnail document={document} />
+                {/* The preview opens only from the thumbnail, not from the whole row. */}
+                <span
+                  className="shrink-0"
+                  onMouseEnter={() => startHover(document)}
+                  onMouseMove={moveHover}
+                  onMouseLeave={stopHover}
+                >
+                  <Thumbnail document={document} />
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{document.fileName}</p>
                   <p className="text-neutral-500">{document.documentTypeName ?? "ยังไม่ระบุประเภท"}</p>
