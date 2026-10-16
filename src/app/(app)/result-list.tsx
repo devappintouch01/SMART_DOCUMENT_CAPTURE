@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useHoverPreview } from "@/components/hover-preview";
+import { PdfThumbnail } from "@/components/pdf-thumbnail";
 import { canSelect, selectAllIds } from "@/domain/selection";
 import type { DocumentAiSummary } from "@/domain/ai-usage";
 import type { DocumentListItem } from "@/domain/types";
@@ -34,6 +35,7 @@ function Thumbnail({ document }: { document: DocumentListItem }) {
       />
     );
   }
+  if (document.fileUrl && document.mimeType === "application/pdf") return <PdfThumbnail url={document.fileUrl} />;
   return (
     <span className="flex h-12 w-12 items-center justify-center rounded-md border border-black/10 bg-red-50 text-xs font-semibold text-red-700">
       PDF

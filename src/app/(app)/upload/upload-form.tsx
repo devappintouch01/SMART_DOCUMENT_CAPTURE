@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { isHeic, MAX_FILES_PER_BATCH } from "@/domain/upload-limits";
 import { useHoverPreview } from "@/components/hover-preview";
+import { PdfThumbnail } from "@/components/pdf-thumbnail";
 import { Select } from "@/components/select";
 import { hashFile, prepareFile, uploadToSignedUrl } from "@/lib/browser-upload";
 import { registerUploads, requestUploads } from "./actions";
@@ -291,9 +292,11 @@ export function UploadForm({ documentTypes }: Props) {
                     alt=""
                     className="h-12 w-12 rounded-md border border-black/10 object-cover"
                   />
+                ) : entry.objectUrl && entry.mimeType === "application/pdf" ? (
+                  <PdfThumbnail url={entry.objectUrl} />
                 ) : (
                   <span className="flex h-12 w-12 items-center justify-center rounded-md border border-black/10 bg-red-50 text-xs font-semibold text-red-700">
-                    {entry.mimeType === "application/pdf" ? "PDF" : "—"}
+                    —
                   </span>
                 )}
               </span>
