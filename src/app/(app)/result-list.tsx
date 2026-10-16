@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useHoverPreview } from "@/components/hover-preview";
 import { canSelect, selectAllIds } from "@/domain/selection";
 import type { DocumentAiSummary } from "@/domain/ai-usage";
 import type { DocumentListItem } from "@/domain/types";
@@ -40,38 +41,6 @@ function Thumbnail({ document }: { document: DocumentListItem }) {
   );
 }
 
-const PREVIEW_WIDTH = 380;
-const PREVIEW_HEIGHT = 500;
-
-// The original file next to the pointer while it rests on a thumbnail. Follows the
-// pointer, flips to its left near the right edge, and never takes the hover.
-function HoverPreview({ document, x, y }: { document: DocumentListItem; x: number; y: number }) {
-  if (!document.fileUrl) return null;
-  const left = x + 24 + PREVIEW_WIDTH > window.innerWidth - 12 ? x - 24 - PREVIEW_WIDTH : x + 24;
-  const top = Math.min(Math.max(8, y - PREVIEW_HEIGHT / 3), Math.max(8, window.innerHeight - PREVIEW_HEIGHT - 8));
-  const isPdf = document.mimeType === "application/pdf";
-  return (
-    <div
-      aria-hidden="true"
-      style={{ left, top, width: PREVIEW_WIDTH, height: PREVIEW_HEIGHT }}
-      className="pointer-events-none fixed z-50 overflow-hidden rounded-xl border border-black/15 bg-white shadow-2xl"
-    >
-      {isPdf ? (
-        <iframe
-          src={`${document.fileUrl}#toolbar=0&navpanes=0&view=FitH`}
-          title={`ตัวอย่าง ${document.fileName}`}
-          className="h-full w-full"
-          tabIndex={-1}
-        />
-      ) : (
-        // Short-lived signed URL from Storage, so next/image has nothing to optimise.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={document.fileUrl} alt="" className="h-full w-full object-contain" />
-      )}
-    </div>
-  );
-}
-
 type Props = {
   documents: DocumentListItem[];
   offset: number;
@@ -80,23 +49,7 @@ type Props = {
 };
 
 export function ResultList({ documents, offset, aiInfo }: Props) {
-  // Hover preview: wait a moment so passing over a thumbnail does not load the file.
-  const [hovered, setHovered] = useState<{ document: DocumentListItem; x: number; y: number } | null>(null);
-  const pointer = useRef({ x: 0, y: 0 });
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const stopHover = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-    setHovered(null);
-  };
-  const startHover = (document: DocumentListItem) => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setHovered({ document, ...pointer.current }), 350);
-  };
-  const moveHover = (event: React.MouseEvent) => {
-    pointer.current = { x: event.clientX, y: event.clientY };
-    setHovered((current) => (current ? { ...current, ...pointer.current } : current));
-  };
+  const hover = useHoverPreview();
 
   const [picked, setPickedState] = useState<Record<string, Picked>>(recallPicked);
   const setPicked = (next: Record<string, Picked>) => {
@@ -270,9 +223,11 @@ export function ResultList({ documents, offset, aiInfo }: Props) {
                 {/* The preview opens only from the thumbnail, not from the whole row. */}
                 <span
                   className="shrink-0"
-                  onMouseEnter={() => startHover(document)}
-                  onMouseMove={moveHover}
-                  onMouseLeave={stopHover}
+                  {...hover.handlers(
+                    document.fileUrl
+                      ? { url: document.fileUrl, mimeType: document.mimeType, title: document.fileName }
+                      : null,
+                  )}
                 >
                   <Thumbnail document={document} />
                 </span>
@@ -306,7 +261,7 @@ export function ResultList({ documents, offset, aiInfo }: Props) {
           );
         })}
       </ul>
-      {hovered && <HoverPreview document={hovered.document} x={hovered.x} y={hovered.y} />}
+      {hover.element}
     </div>
   );
 }

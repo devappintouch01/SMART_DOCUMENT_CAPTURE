@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isHeic, MAX_FILES_PER_BATCH } from "@/domain/upload-limits";
+import { useHoverPreview } from "@/components/hover-preview";
 import { Select } from "@/components/select";
 import { hashFile, prepareFile, uploadToSignedUrl } from "@/lib/browser-upload";
 import { registerUploads, requestUploads } from "./actions";
@@ -15,6 +16,9 @@ type Entry = {
   file: File;
   mimeType: string;
   pageCount: number;
+  // A local link to the picked file, for the thumbnail and the hover preview
+  // (null for a file that cannot be uploaded). Released when the row goes away.
+  objectUrl: string | null;
   // SHA-256 of the file bytes, to spot the same file picked twice in one round
   // (null when the browser cannot compute it).
   hash: string | null;
@@ -44,9 +48,25 @@ export function UploadForm({ documentTypes }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const hover = useHoverPreview();
+  // Every object URL still in use, so they can all be released when leaving the page.
+  const objectUrls = useRef(new Set<string>());
   // A second click before the first upload has re-rendered must not start another round.
   const uploading = useRef(false);
   const router = useRouter();
+
+  useEffect(() => {
+    const urls = objectUrls.current;
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
+
+  function removeEntry(entry: Entry) {
+    if (entry.objectUrl) {
+      URL.revokeObjectURL(entry.objectUrl);
+      objectUrls.current.delete(entry.objectUrl);
+    }
+    setEntries((current) => current.filter((e) => e.key !== entry.key));
+  }
 
   const patch = (key: string, changes: Partial<Entry>) =>
     setEntries((current) =>
@@ -73,6 +93,7 @@ export function UploadForm({ documentTypes }: Props) {
         file,
         mimeType,
         pageCount,
+        objectUrl: problem ? null : URL.createObjectURL(file),
         hash: problem ? null : await hashFile(file),
         status: problem ? "rejected" : "ready",
         duplicateNote: null,
@@ -96,6 +117,7 @@ export function UploadForm({ documentTypes }: Props) {
         seen.set(entry.hash, entry.file.name);
       }
     }
+    for (const entry of added) if (entry.objectUrl) objectUrls.current.add(entry.objectUrl);
     setEntries((current) => [...current, ...added]);
   }
 
@@ -253,6 +275,28 @@ export function UploadForm({ documentTypes }: Props) {
         <ul className="divide-y divide-black/10 rounded-xl border border-black/10 bg-white">
           {entries.map((entry) => (
             <li key={entry.key} className="flex items-center gap-4 px-4 py-3 text-sm">
+              <span
+                className="shrink-0"
+                {...hover.handlers(
+                  entry.objectUrl
+                    ? { url: entry.objectUrl, mimeType: entry.mimeType, title: entry.file.name }
+                    : null,
+                )}
+              >
+                {entry.objectUrl && entry.mimeType.startsWith("image/") ? (
+                  // A local object URL, so next/image has nothing to optimise.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={entry.objectUrl}
+                    alt=""
+                    className="h-12 w-12 rounded-md border border-black/10 object-cover"
+                  />
+                ) : (
+                  <span className="flex h-12 w-12 items-center justify-center rounded-md border border-black/10 bg-red-50 text-xs font-semibold text-red-700">
+                    {entry.mimeType === "application/pdf" ? "PDF" : "—"}
+                  </span>
+                )}
+              </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{entry.file.name}</p>
                 <p className="text-neutral-500">
@@ -290,7 +334,7 @@ export function UploadForm({ documentTypes }: Props) {
                 <button
                   type="button"
                   aria-label={`เอา ${entry.file.name} ออก`}
-                  onClick={() => setEntries((current) => current.filter((e) => e.key !== entry.key))}
+                  onClick={() => removeEntry(entry)}
                   className="text-neutral-400 hover:text-red-600"
                 >
                   ✕
@@ -300,6 +344,7 @@ export function UploadForm({ documentTypes }: Props) {
           ))}
         </ul>
       )}
+      {hover.element}
 
       <div className="flex items-center gap-3">
         <button
