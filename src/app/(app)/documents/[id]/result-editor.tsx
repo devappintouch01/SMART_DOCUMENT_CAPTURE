@@ -49,8 +49,8 @@ function columnWidth(kind: Field["kind"]): string {
     case "date":
       return "min-w-36";
     default:
-      // Numbers and money stay narrow so the text columns take the rest.
-      return "w-36 min-w-28";
+      // Numbers and money are narrower than text but wide enough for 1,234,567.89 and a flag note.
+      return "w-44 min-w-40";
   }
 }
 
