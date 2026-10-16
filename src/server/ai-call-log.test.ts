@@ -130,3 +130,60 @@ describe("Document completion time and usage report", () => {
     expect(report.totalCostUsd).toBeCloseTo(0.06);
   });
 });
+
+describe("choosing the reading model", () => {
+  const setup = () => {
+    const store = new InMemoryStore();
+    const service = createDocumentService({
+      store,
+      ai: new FakeAiReader(),
+      concurrency: 4,
+      fallbackExtractionModel: "claude-opus-5-5",
+    });
+    return { store, service };
+  };
+
+  it("uses the environment default until the superadmin picks a model", async () => {
+    const { service } = setup();
+
+    expect(await service.getExtractionModel()).toEqual({ model: "claude-opus-5-5", source: "default" });
+  });
+
+  it("remembers the pick and prefers it over the default", async () => {
+    const { service } = setup();
+
+    await service.setExtractionModel("claude-haiku-5-5");
+
+    expect(await service.getExtractionModel()).toEqual({ model: "claude-haiku-5-5", source: "setting" });
+  });
+
+  it("refuses a model that is not on the list", async () => {
+    const { service } = setup();
+
+    await expect(service.setExtractionModel("gpt-whatever")).rejects.toThrow("ไม่รู้จักโมเดล");
+    expect((await service.getExtractionModel()).source).toBe("default");
+  });
+
+  it("ignores a saved value that is no longer on the list", async () => {
+    const { store, service } = setup();
+    store.settings.set("extraction_model", "retired-model");
+
+    expect(await service.getExtractionModel()).toEqual({ model: "claude-opus-5-5", source: "default" });
+  });
+
+  it("makes the reader ask for the model on every call", async () => {
+    const asked: string[] = [];
+    const reader = new ClaudeAiReader(
+      fakeClient(async () => okResponse),
+      async () => {
+        asked.push("looked up");
+        return "claude-haiku-5-5";
+      },
+    );
+
+    await reader.extract(file, taxInvoice);
+    await reader.extract(file, taxInvoice);
+
+    expect(asked).toHaveLength(2);
+  });
+});

@@ -1,5 +1,6 @@
 import "server-only";
-import { ClaudeAiReader } from "./claude-ai-reader";
+import { ClaudeAiReader, DEFAULT_EXTRACTION_MODEL } from "./claude-ai-reader";
+import { resolveExtractionModel } from "./ai-settings";
 import {
   createDocumentService,
   DEFAULT_EXTRACTION_CONCURRENCY,
@@ -11,10 +12,19 @@ let service: DocumentService | undefined;
 
 // Wires the Document service to the real adapters.
 export function getDocumentService(): DocumentService {
+  if (service) return service;
   const store = SupabaseStore.fromEnv();
-  service ??= createDocumentService({
+  // Used until the superadmin picks a model on the AI dashboard.
+  const fallbackModel = process.env.AI_EXTRACTION_MODEL || DEFAULT_EXTRACTION_MODEL;
+  service = createDocumentService({
     store,
-    ai: new ClaudeAiReader(undefined, undefined, undefined, (call) => store.recordAiCall(call)),
+    ai: new ClaudeAiReader(
+      undefined,
+      async () => (await resolveExtractionModel(store, fallbackModel)).model,
+      undefined,
+      (call) => store.recordAiCall(call),
+    ),
+    fallbackExtractionModel: fallbackModel,
     concurrency:
       Number(process.env.EXTRACTION_CONCURRENCY) || DEFAULT_EXTRACTION_CONCURRENCY,
   });

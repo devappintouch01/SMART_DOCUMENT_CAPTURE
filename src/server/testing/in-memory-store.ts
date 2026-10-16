@@ -28,6 +28,7 @@ export class InMemoryStore implements Store {
   files = new Map<string, Uint8Array>();
   uploadTargets: string[] = [];
   aiCalls: AiCall[] = [];
+  settings = new Map<string, string>();
   now = () => new Date();
 
   addDocument(overrides: Partial<StoredDocument> = {}): StoredDocument {
@@ -305,5 +306,13 @@ export class InMemoryStore implements Store {
 
   async listAllAiCalls(): Promise<AiCall[]> {
     return [...this.aiCalls];
+  }
+
+  async getSetting(key: string): Promise<string | null> {
+    return this.settings.get(key) ?? null;
+  }
+
+  async setSetting(key: string, value: string): Promise<void> {
+    this.settings.set(key, value);
   }
 }

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { EXTRACTION_MODEL_SETTING, isExtractionModel } from "@/domain/ai-models";
+import { resolveExtractionModel, type ModelChoice } from "./ai-settings";
 import { averageCostPerDocument, summarizeAiCalls, type AiCall, type ModelUsage } from "@/domain/ai-usage";
 import { applyCorrections, confirmFlags, type CorrectionInput, type FlagTarget } from "@/domain/corrections";
 import {
@@ -137,6 +139,8 @@ export function createDocumentService(deps: {
   ai: AiReader;
   concurrency?: number;
   now?: () => Date;
+  // The model used until the superadmin picks one (AI_EXTRACTION_MODEL).
+  fallbackExtractionModel?: string;
 }) {
   const { store, ai } = deps;
   const concurrency = deps.concurrency ?? DEFAULT_EXTRACTION_CONCURRENCY;
@@ -533,6 +537,16 @@ export function createDocumentService(deps: {
     },
 
     // --- superadmin only: callers must check the role before using these ---
+
+    // The model reading Documents now, and whether it was picked in the app.
+    async getExtractionModel(): Promise<ModelChoice> {
+      return resolveExtractionModel(store, deps.fallbackExtractionModel ?? "");
+    },
+
+    async setExtractionModel(modelId: string): Promise<void> {
+      if (!isExtractionModel(modelId)) throw new UserFacingError("ไม่รู้จักโมเดลที่เลือก");
+      await store.setSetting(EXTRACTION_MODEL_SETTING, modelId);
+    },
 
     // Every AI call made for one Document, oldest first.
     async getAiCalls(documentId: string): Promise<AiCall[]> {

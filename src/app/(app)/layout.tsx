@@ -44,8 +44,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
               ประเภทเอกสาร
             </Link>
             {superAdmin && (
-              <Link href="/ai-usage" className={navLink}>
-                การใช้ AI
+              <Link href="/ai-dashboard" className={navLink}>
+                แดชบอร์ด AI
               </Link>
             )}
           </nav>

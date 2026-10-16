@@ -78,6 +78,9 @@ export interface Store {
   requeueExtraction(id: string, nextAttemptAt: Date): Promise<void>;
   // Extractions that have been running since before the cutoff.
   listStaleExtractions(cutoff: Date): Promise<{ id: string; attemptCount: number }[]>;
+  // --- app settings (superadmin changes them) ---
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
   // --- AI call log (superadmin only) ---
   recordAiCall(call: NewAiCall): Promise<void>;
   listAiCalls(documentId: string): Promise<AiCall[]>;

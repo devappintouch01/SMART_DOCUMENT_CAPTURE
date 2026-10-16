@@ -26,7 +26,7 @@ export function RerunPanel({ documentId, currentTypeId, documentTypes }: Props) 
     });
 
   return (
-    <div className="rounded-xl border border-black/10 bg-white p-4 text-sm">
+    <div className="h-full rounded-xl border border-black/10 bg-white p-4 text-sm">
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex-1">
           <span className="mb-1 block text-neutral-500">ประเภทเอกสาร</span>

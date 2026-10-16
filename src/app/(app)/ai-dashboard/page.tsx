@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
+import { EXTRACTION_MODELS } from "@/domain/ai-models";
 import { TARGET_BAHT_PER_DOCUMENT, toBaht, USD_TO_THB } from "@/domain/ai-usage";
 import { requireSuperAdmin } from "@/lib/session";
 import { getDocumentService } from "@/server/container";
 import { formatBaht, formatSeconds, formatUsd } from "../ai-format";
+import { ModelPicker } from "./model-picker";
 
-export const metadata: Metadata = { title: "การใช้ AI" };
+export const metadata: Metadata = { title: "แดชบอร์ด AI" };
 export const dynamic = "force-dynamic";
 
 export default async function AiUsagePage() {
   await requireSuperAdmin();
-  const report = await getDocumentService().getAiUsageReport();
+  const service = getDocumentService();
+  const [report, choice] = await Promise.all([service.getAiUsageReport(), service.getExtractionModel()]);
 
   const average = report.averageCostPerDocumentUsd;
   const anyMeasured = report.models.some((m) => m.measuredCalls > 0);
@@ -17,10 +20,28 @@ export default async function AiUsagePage() {
 
   return (
     <section>
-      <h1 className="text-2xl font-semibold">การใช้ AI</h1>
+      <h1 className="text-2xl font-semibold">แดชบอร์ด AI</h1>
       <p className="mt-1 text-sm text-neutral-500">
         เห็นเฉพาะ superadmin · แปลงเป็นบาทที่ {USD_TO_THB} บาทต่อ 1 USD · นับเฉพาะการเรียกที่วัดต้นทุนได้
       </p>
+
+      <div className="mt-6">
+        <ModelPicker
+          current={choice.model}
+          source={choice.source}
+          options={EXTRACTION_MODELS.map((m) => {
+            const measured = report.models.find((row) => row.model === m.id)?.avgCostPerDocumentUsd ?? null;
+            return {
+              id: m.id,
+              label: m.label,
+              note: m.note,
+              inputPerMTok: m.inputPerMTok,
+              outputPerMTok: m.outputPerMTok,
+              measuredBahtPerDocument: measured === null ? null : formatBaht(measured),
+            };
+          })}
+        />
+      </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         <div className="rounded-xl border border-black/10 bg-white p-5">

@@ -574,4 +574,17 @@ export class SupabaseStore implements Store {
     if (error) throw error;
     return data.map(toAiCall);
   }
+
+  async getSetting(key: string): Promise<string | null> {
+    const { data, error } = await this.db.from("app_settings").select("value").eq("key", key).maybeSingle();
+    if (error) throw error;
+    return (data?.value as string | undefined) ?? null;
+  }
+
+  async setSetting(key: string, value: string): Promise<void> {
+    const { error } = await this.db
+      .from("app_settings")
+      .upsert({ key, value, updated_at: new Date().toISOString() });
+    if (error) throw error;
+  }
 }

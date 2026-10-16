@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { priceFor } from "@/domain/ai-models";
 import type { NewAiCall } from "@/domain/ai-usage";
 import type { RawValue } from "@/domain/extracted-data";
 import type { DocumentType, Field, FieldKind, FieldScope } from "@/domain/types";
@@ -143,16 +144,8 @@ export function toReaderError(error: unknown): AiReaderError {
   return new AiReaderError(false, "เกิดข้อผิดพลาดระหว่างเรียก AI", { cause: error });
 }
 
-// USD per million tokens (input, output) for the models this app uses, from the
-// published price list. Only for the estimate in the log line; billing is the
-// source of truth.
-const PRICE_PER_MTOK: Record<string, [input: number, output: number]> = {
-  "claude-opus-5-5": [4, 20],
-  "claude-haiku-5-5": [0.1, 0.5],
-};
-
 function estimateUsd(model: string, inputTokens: number, outputTokens: number): number | null {
-  const price = PRICE_PER_MTOK[model];
+  const price = priceFor(model);
   return price ? (inputTokens * price[0] + outputTokens * price[1]) / 1_000_000 : null;
 }
 
@@ -243,12 +236,17 @@ type ProposalOutput = {
 export class ClaudeAiReader implements AiReader {
   constructor(
     private readonly client = new Anthropic(),
-    private readonly model = process.env.AI_EXTRACTION_MODEL || DEFAULT_EXTRACTION_MODEL,
+    // A model id, or a function that looks it up on every call (the superadmin can change it).
+    private readonly model: string | (() => Promise<string>) = process.env.AI_EXTRACTION_MODEL || DEFAULT_EXTRACTION_MODEL,
     private readonly classificationModel = process.env.AI_CLASSIFICATION_MODEL ||
       DEFAULT_CLASSIFICATION_MODEL,
     // Where each call is written down (the AI call log); optional.
     private readonly record?: (call: NewAiCall) => Promise<void>,
   ) {}
+
+  private async currentModel(): Promise<string> {
+    return typeof this.model === "function" ? this.model() : this.model;
+  }
 
   // Runs one API call, times it and writes it to the call log. A failure to log
   // must never fail the reading itself.
@@ -299,9 +297,10 @@ export class ClaudeAiReader implements AiReader {
   }
 
   async proposeDocumentType(file: DocumentFile, context: AiCallContext = {}): Promise<DocumentTypeProposal> {
-    const response = await this.traced("propose", this.model, context, () =>
+    const model = await this.currentModel();
+    const response = await this.traced("propose", model, context, () =>
       this.client.beta.messages.create({
-        model: this.model,
+        model,
         max_tokens: 8000,
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
@@ -398,9 +397,10 @@ export class ClaudeAiReader implements AiReader {
   ): Promise<ExtractionOutput> {
     const { schema, header, lines } = buildSchema(documentType);
 
-    const response = await this.traced("extract", this.model, context, () =>
+    const model = await this.currentModel();
+    const response = await this.traced("extract", model, context, () =>
       this.client.beta.messages.create({
-        model: this.model,
+        model,
         max_tokens: 16000,
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
