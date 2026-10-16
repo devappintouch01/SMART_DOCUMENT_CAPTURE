@@ -64,7 +64,7 @@ export function CopyButton({ label, getText, compact, disabled, title }: Props) 
       onClick={copy}
       disabled={disabled}
       title={title}
-      className="rounded-md border border-black/15 px-3 py-1.5 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+      className="h-9 rounded-md border border-black/15 px-3.5 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {state === "copied" ? "คัดลอกแล้ว ✓" : state === "failed" ? "คัดลอกไม่สำเร็จ" : label}
     </button>

@@ -231,67 +231,74 @@ export function ResultEditor({ documentId, headerFields, lineFields, data, viewe
       <div className="z-30 -mx-1 bg-background/95 px-1 py-2 backdrop-blur lg:sticky lg:top-[53px]">
         <div className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           <div className="min-w-0">{notices}</div>
-        <div className="flex flex-wrap content-center items-center gap-3 rounded-xl border border-black/10 bg-white px-4 py-3 text-sm shadow-sm">
-          <button
-            type="button"
-            onClick={save}
-            disabled={pending || !dirty}
-            className="rounded-md bg-primary px-4 py-1.5 font-medium text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {pending ? "กำลังบันทึก…" : "บันทึกการแก้ไข"}
-          </button>
-          {dirty && (
+        {/* Two rows: what you do to the values (save, confirm), then taking them out. */}
+        <div className="flex flex-col justify-center gap-3 rounded-xl border border-black/10 bg-white px-4 py-3 text-sm shadow-sm">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <button
               type="button"
-              onClick={() => {
-                setHeader(initialHeader);
-                setRows(initialRows);
-                setError(null);
-              }}
-              disabled={pending}
-              className="text-neutral-500 hover:text-foreground"
+              onClick={save}
+              disabled={pending || !dirty}
+              className="h-9 rounded-md bg-primary px-4 font-medium text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
-              ยกเลิกการแก้ไข
+              {pending ? "กำลังบันทึก…" : "บันทึกการแก้ไข"}
             </button>
-          )}
-          <span className={dirty ? "text-amber-700" : "text-neutral-500"}>
-            {dirty ? "มีการแก้ไขที่ยังไม่ได้บันทึก" : "ค่าที่แก้ไขแล้วแสดงเป็นสีน้ำเงิน"}
-          </span>
-          <CopyButton
-            label="คัดลอกข้อมูลหลัก"
-            disabled={dirty}
-            title={dirty ? "บันทึกการแก้ไขก่อน" : "วางลง Excel ได้ทันที"}
-            getText={() => headerTsv([...headerFields, ...lineFields], data)}
-          />
-          {lineFields.length > 0 && (
+            {dirty && (
+              <button
+                type="button"
+                onClick={() => {
+                  setHeader(initialHeader);
+                  setRows(initialRows);
+                  setError(null);
+                }}
+                disabled={pending}
+                className="h-9 text-neutral-500 hover:text-foreground"
+              >
+                ยกเลิกการแก้ไข
+              </button>
+            )}
+            <span className={`text-xs ${dirty ? "text-amber-700" : "text-neutral-500"}`}>
+              {dirty ? "มีการแก้ไขที่ยังไม่ได้บันทึก" : "ค่าที่แก้ไขแล้วแสดงเป็นสีน้ำเงิน"}
+            </span>
+            {openFlags.length > 0 && (
+              <button
+                type="button"
+                onClick={() => run(() => confirmReviewFlags(documentId, openFlags))}
+                disabled={pending || dirty}
+                title={dirty ? "บันทึกการแก้ไขก่อน" : undefined}
+                className="ml-auto h-9 rounded-md border border-amber-300 px-3.5 text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+              >
+                ยืนยันทั้ง {openFlags.length} ช่องที่ควรตรวจ
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-black/5 pt-3">
+            <span className="mr-1 text-xs text-neutral-500">นำข้อมูลออก</span>
             <CopyButton
-              label="คัดลอกรายการ"
+              label="คัดลอกข้อมูลหลัก"
               disabled={dirty}
               title={dirty ? "บันทึกการแก้ไขก่อน" : "วางลง Excel ได้ทันที"}
-              getText={() => lineItemsTsv([...headerFields, ...lineFields], data)}
+              getText={() => headerTsv([...headerFields, ...lineFields], data)}
             />
-          )}
-          <a
-            href={dirty ? undefined : `/api/documents/${documentId}/export`}
-            aria-disabled={dirty}
-            title={dirty ? "บันทึกการแก้ไขก่อน" : undefined}
-            className={`rounded-md border border-green-600 px-3 py-1.5 font-medium text-green-800 ${
-              dirty ? "pointer-events-none opacity-50" : "hover:bg-green-50"
-            }`}
-          >
-            ดาวน์โหลด Excel
-          </a>
-          {openFlags.length > 0 && (
-            <button
-              type="button"
-              onClick={() => run(() => confirmReviewFlags(documentId, openFlags))}
-              disabled={pending || dirty}
+            {lineFields.length > 0 && (
+              <CopyButton
+                label="คัดลอกรายการ"
+                disabled={dirty}
+                title={dirty ? "บันทึกการแก้ไขก่อน" : "วางลง Excel ได้ทันที"}
+                getText={() => lineItemsTsv([...headerFields, ...lineFields], data)}
+              />
+            )}
+            <a
+              href={dirty ? undefined : `/api/documents/${documentId}/export`}
+              aria-disabled={dirty}
               title={dirty ? "บันทึกการแก้ไขก่อน" : undefined}
-              className="ml-auto rounded-md border border-amber-300 px-3 py-1.5 text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+              className={`inline-flex h-9 items-center rounded-md border border-green-600 px-3.5 font-medium text-green-800 ${
+                dirty ? "pointer-events-none opacity-50" : "hover:bg-green-50"
+              }`}
             >
-              ยืนยันทั้ง {openFlags.length} ช่องที่ควรตรวจ
-            </button>
-          )}
+              ดาวน์โหลด Excel
+            </a>
+          </div>
         </div>
         </div>
       </div>
