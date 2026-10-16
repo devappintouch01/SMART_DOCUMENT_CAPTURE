@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { AiCall, NewAiCall } from "@/domain/ai-usage";
 import { countOpenFlags, type ExtractedData } from "@/domain/extracted-data";
 import type { DocumentSummary, DocumentType, ExtractionStatus } from "@/domain/types";
 import type { ClaimedDocument, FieldInput, NewDocument, Store, UploadTarget } from "../ports";
@@ -18,6 +19,7 @@ export type StoredDocument = {
   extractingSince: Date | null;
   extractedData: ExtractedData | null;
   uploadedAt: Date;
+  completedAt?: Date | null;
 };
 
 export class InMemoryStore implements Store {
@@ -25,6 +27,7 @@ export class InMemoryStore implements Store {
   documents: StoredDocument[] = [];
   files = new Map<string, Uint8Array>();
   uploadTargets: string[] = [];
+  aiCalls: AiCall[] = [];
   now = () => new Date();
 
   addDocument(overrides: Partial<StoredDocument> = {}): StoredDocument {
@@ -82,6 +85,7 @@ export class InMemoryStore implements Store {
       ...this.summary(d),
       pageCount: d.pageCount,
       extractedData: structuredClone(d.extractedData),
+      completedAt: d.completedAt ?? null,
     };
   }
 
@@ -224,6 +228,7 @@ export class InMemoryStore implements Store {
     d.extractedData = structuredClone(data);
     d.failureReason = null;
     d.extractingSince = null;
+    d.completedAt = this.now();
   }
 
   async failExtraction(id: string, reason: string): Promise<void> {
@@ -232,6 +237,7 @@ export class InMemoryStore implements Store {
     d.status = "failed";
     d.failureReason = reason;
     d.extractingSince = null;
+    d.completedAt = this.now();
   }
 
   async requeueExtraction(id: string, nextAttemptAt: Date): Promise<void> {
@@ -273,6 +279,7 @@ export class InMemoryStore implements Store {
       failureReason: null,
       attemptCount: 0,
       nextAttemptAt: null,
+      completedAt: null,
     });
     return true;
   }
@@ -284,6 +291,19 @@ export class InMemoryStore implements Store {
     d.attemptCount = 0;
     d.failureReason = null;
     d.nextAttemptAt = null;
+    d.completedAt = null;
     return true;
+  }
+
+  async recordAiCall(call: NewAiCall): Promise<void> {
+    this.aiCalls.push({ ...call, id: crypto.randomUUID(), isLegacy: false });
+  }
+
+  async listAiCalls(documentId: string): Promise<AiCall[]> {
+    return this.aiCalls.filter((c) => c.documentId === documentId);
+  }
+
+  async listAllAiCalls(): Promise<AiCall[]> {
+    return [...this.aiCalls];
   }
 }

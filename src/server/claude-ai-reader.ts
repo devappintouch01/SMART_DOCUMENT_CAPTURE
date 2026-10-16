@@ -1,9 +1,11 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import type { NewAiCall } from "@/domain/ai-usage";
 import type { RawValue } from "@/domain/extracted-data";
 import type { DocumentType, Field, FieldKind, FieldScope } from "@/domain/types";
 import {
   AiReaderError,
+  type AiCallContext,
   type AiReader,
   type ClassificationOutput,
   type DocumentFile,
@@ -149,13 +151,17 @@ const PRICE_PER_MTOK: Record<string, [input: number, output: number]> = {
   "claude-haiku-5-5": [0.1, 0.5],
 };
 
+function estimateUsd(model: string, inputTokens: number, outputTokens: number): number | null {
+  const price = PRICE_PER_MTOK[model];
+  return price ? (inputTokens * price[0] + outputTokens * price[1]) / 1_000_000 : null;
+}
+
 // One log line per AI call: what it cost in tokens and roughly in dollars, so a
 // month's spend can be added up from the logs (search for "[ai-usage]").
 function logUsage(operation: string, response: Anthropic.Beta.BetaMessage) {
   const input = response.usage.input_tokens;
   const output = response.usage.output_tokens;
-  const price = PRICE_PER_MTOK[response.model];
-  const usd = price ? (input * price[0] + output * price[1]) / 1_000_000 : null;
+  const usd = estimateUsd(response.model, input, output);
   console.info(
     `[ai-usage] ${JSON.stringify({ operation, model: response.model, inputTokens: input, outputTokens: output, estimatedUsd: usd === null ? null : Number(usd.toFixed(5)) })}`,
   );
@@ -240,12 +246,61 @@ export class ClaudeAiReader implements AiReader {
     private readonly model = process.env.AI_EXTRACTION_MODEL || DEFAULT_EXTRACTION_MODEL,
     private readonly classificationModel = process.env.AI_CLASSIFICATION_MODEL ||
       DEFAULT_CLASSIFICATION_MODEL,
+    // Where each call is written down (the AI call log); optional.
+    private readonly record?: (call: NewAiCall) => Promise<void>,
   ) {}
 
-  async proposeDocumentType(file: DocumentFile): Promise<DocumentTypeProposal> {
+  // Runs one API call, times it and writes it to the call log. A failure to log
+  // must never fail the reading itself.
+  private async traced(
+    operation: NewAiCall["operation"],
+    requestedModel: string,
+    context: AiCallContext,
+    run: () => Promise<Anthropic.Beta.BetaMessage>,
+  ): Promise<Anthropic.Beta.BetaMessage> {
+    const startedAt = new Date();
+    const began = performance.now();
+    const write = async (call: Partial<NewAiCall> & Pick<NewAiCall, "model" | "status">) => {
+      try {
+        await this.record?.({
+          documentId: context.documentId ?? null,
+          operation,
+          provider: "anthropic",
+          startedAt,
+          durationMs: Math.round(performance.now() - began),
+          inputTokens: null,
+          outputTokens: null,
+          costUsd: null,
+          error: null,
+          ...call,
+        });
+      } catch (error) {
+        console.error("could not write the AI call log", error);
+      }
+    };
+
     let response: Anthropic.Beta.BetaMessage;
     try {
-      response = await this.client.beta.messages.create({
+      response = await run();
+    } catch (error) {
+      const readerError = toReaderError(error);
+      await write({ model: requestedModel, status: "error", error: readerError.userMessage });
+      throw readerError;
+    }
+    const { input_tokens: input, output_tokens: output } = response.usage;
+    await write({
+      model: response.model,
+      status: "ok",
+      inputTokens: input,
+      outputTokens: output,
+      costUsd: estimateUsd(response.model, input, output),
+    });
+    return response;
+  }
+
+  async proposeDocumentType(file: DocumentFile, context: AiCallContext = {}): Promise<DocumentTypeProposal> {
+    const response = await this.traced("propose", this.model, context, () =>
+      this.client.beta.messages.create({
         model: this.model,
         max_tokens: 8000,
         betas: ["server-side-fallback-2026-07-01"],
@@ -258,10 +313,8 @@ export class ClaudeAiReader implements AiReader {
             content: [documentBlock(file), { type: "text", text: "Propose the Document Type for this document." }],
           },
         ],
-      });
-    } catch (error) {
-      throw toReaderError(error);
-    }
+      }),
+    );
 
     const output = parseJson<ProposalOutput>(responseText(response, "propose"));
     const toField = (scope: FieldScope) => (f: ProposalOutput["header_fields"][number]) => ({
@@ -279,7 +332,11 @@ export class ClaudeAiReader implements AiReader {
     };
   }
 
-  async classify(file: DocumentFile, documentTypes: DocumentType[]): Promise<ClassificationOutput> {
+  async classify(
+    file: DocumentFile,
+    documentTypes: DocumentType[],
+    context: AiCallContext = {},
+  ): Promise<ClassificationOutput> {
     // Positional keys keep the enum short and free of names the schema
     // compiler might reject.
     const keys = documentTypes.map((_, i) => `t${i}`);
@@ -290,10 +347,9 @@ export class ClaudeAiReader implements AiReader {
       })
       .join("\n");
 
-    let response: Anthropic.Beta.BetaMessage;
-    try {
-      // No server-side fallbacks: Haiku has none, and a refusal here is rare.
-      response = await this.client.beta.messages.create({
+    // No server-side fallbacks: Haiku has none, and a refusal here is rare.
+    const response = await this.traced("classify", this.classificationModel, context, () =>
+      this.client.beta.messages.create({
         model: this.classificationModel,
         max_tokens: 4000,
         output_config: {
@@ -324,10 +380,8 @@ export class ClaudeAiReader implements AiReader {
             ],
           },
         ],
-      });
-    } catch (error) {
-      throw toReaderError(error);
-    }
+      }),
+    );
 
     const output = parseJson<{ document_type: string; reason: string }>(responseText(response, "classify"));
     const index = keys.indexOf(output.document_type);
@@ -337,12 +391,15 @@ export class ClaudeAiReader implements AiReader {
     };
   }
 
-  async extract(file: DocumentFile, documentType: DocumentType): Promise<ExtractionOutput> {
+  async extract(
+    file: DocumentFile,
+    documentType: DocumentType,
+    context: AiCallContext = {},
+  ): Promise<ExtractionOutput> {
     const { schema, header, lines } = buildSchema(documentType);
 
-    let response: Anthropic.Beta.BetaMessage;
-    try {
-      response = await this.client.beta.messages.create({
+    const response = await this.traced("extract", this.model, context, () =>
+      this.client.beta.messages.create({
         model: this.model,
         max_tokens: 16000,
         betas: ["server-side-fallback-2026-07-01"],
@@ -361,10 +418,8 @@ export class ClaudeAiReader implements AiReader {
             ],
           },
         ],
-      });
-    } catch (error) {
-      throw toReaderError(error);
-    }
+      }),
+    );
 
     const output = parseJson<ModelOutput>(responseText(response, "extract"));
 

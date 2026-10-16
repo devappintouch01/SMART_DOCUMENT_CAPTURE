@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { averageCostPerDocument, summarizeAiCalls, type AiCall, type ModelUsage } from "@/domain/ai-usage";
 import { applyCorrections, confirmFlags, type CorrectionInput, type FlagTarget } from "@/domain/corrections";
 import {
   toExtractedValue,
@@ -195,7 +196,7 @@ export function createDocumentService(deps: {
       // A retry after a later failure keeps the type already picked.
       let documentTypeId = document.documentTypeId;
       if (!documentTypeId) {
-        const classified = await ai.classify(file, types);
+        const classified = await ai.classify(file, types, { documentId: document.id });
         const match = types.find((t) => t.id === classified.documentTypeId);
         if (!match) {
           await store.failExtraction(document.id, `${NO_MATCHING_TYPE}: ${classified.reason}`);
@@ -210,7 +211,7 @@ export function createDocumentService(deps: {
         await store.failExtraction(document.id, "ไม่พบประเภทเอกสาร");
         return;
       }
-      const output = await ai.extract(file, documentType);
+      const output = await ai.extract(file, documentType, { documentId: document.id });
       if (output.kind === "unreadable") {
         await store.failExtraction(document.id, output.reason);
         return;
@@ -528,6 +529,27 @@ export function createDocumentService(deps: {
         ...document,
         documentType: types.find((t) => t.id === document.documentTypeId) ?? null,
         fileUrl: urls[document.storagePath] ?? null,
+      };
+    },
+
+    // --- superadmin only: callers must check the role before using these ---
+
+    // Every AI call made for one Document, oldest first.
+    async getAiCalls(documentId: string): Promise<AiCall[]> {
+      return store.listAiCalls(documentId);
+    },
+
+    // Cost and speed per model, plus the average cost of reading one Document.
+    async getAiUsageReport(): Promise<{
+      models: ModelUsage[];
+      averageCostPerDocumentUsd: number | null;
+      totalCostUsd: number;
+    }> {
+      const calls = await store.listAllAiCalls();
+      return {
+        models: summarizeAiCalls(calls),
+        averageCostPerDocumentUsd: averageCostPerDocument(calls),
+        totalCostUsd: calls.reduce((sum, c) => sum + (c.costUsd ?? 0), 0),
       };
     },
 

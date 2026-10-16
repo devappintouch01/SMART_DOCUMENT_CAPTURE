@@ -1,3 +1,4 @@
+import type { AiCall, NewAiCall } from "@/domain/ai-usage";
 import type { ExtractedData, RawValue } from "@/domain/extracted-data";
 import type {
   DocumentDetail,
@@ -77,6 +78,10 @@ export interface Store {
   requeueExtraction(id: string, nextAttemptAt: Date): Promise<void>;
   // Extractions that have been running since before the cutoff.
   listStaleExtractions(cutoff: Date): Promise<{ id: string; attemptCount: number }[]>;
+  // --- AI call log (superadmin only) ---
+  recordAiCall(call: NewAiCall): Promise<void>;
+  listAiCalls(documentId: string): Promise<AiCall[]>;
+  listAllAiCalls(): Promise<AiCall[]>;
   // Replaces a Done Document's extracted data (Corrections, confirmed flags).
   saveExtractedData(id: string, data: ExtractedData): Promise<boolean>;
   // Failed → Queued with the attempt count reset; false if it was not Failed.
@@ -137,10 +142,17 @@ export type ClassificationOutput = {
   reason: string;
 };
 
+// Which Document an AI call is for, so the call log can tie them together.
+export type AiCallContext = { documentId?: string };
+
 // The Document service reaches the AI only through this port.
 export interface AiReader {
-  classify(file: DocumentFile, documentTypes: DocumentType[]): Promise<ClassificationOutput>;
+  classify(
+    file: DocumentFile,
+    documentTypes: DocumentType[],
+    context?: AiCallContext,
+  ): Promise<ClassificationOutput>;
   // Suggests a name and Fields for a Document Type from one example document.
-  proposeDocumentType(file: DocumentFile): Promise<DocumentTypeProposal>;
-  extract(file: DocumentFile, documentType: DocumentType): Promise<ExtractionOutput>;
+  proposeDocumentType(file: DocumentFile, context?: AiCallContext): Promise<DocumentTypeProposal>;
+  extract(file: DocumentFile, documentType: DocumentType, context?: AiCallContext): Promise<ExtractionOutput>;
 }

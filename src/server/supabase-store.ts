@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { AiCall, NewAiCall } from "@/domain/ai-usage";
 import { countOpenFlags, type ExtractedData } from "@/domain/extracted-data";
 import type {
   DocumentSummary,
@@ -17,7 +18,7 @@ const SIGNED_URL_SECONDS = 60 * 60;
 // flag count is kept in its own column instead.
 const DOCUMENT_COLUMNS =
   "id, file_name, mime_type, storage_path, page_count, document_type_id, status, failure_reason, open_flag_count, uploaded_at, document_types!documents_document_type_id_fkey(name)";
-const DOCUMENT_DETAIL_COLUMNS = DOCUMENT_COLUMNS + ", extracted_data";
+const DOCUMENT_DETAIL_COLUMNS = DOCUMENT_COLUMNS + ", extracted_data, completed_at";
 
 type DocumentRow = {
   id: string;
@@ -30,6 +31,7 @@ type DocumentRow = {
   failure_reason: string | null;
   open_flag_count: number;
   extracted_data?: ExtractedData | null;
+  completed_at?: string | null;
   uploaded_at: string;
   document_types: { name: string } | null;
 };
@@ -55,6 +57,44 @@ type DocumentTypeRow = {
     position: number;
   }[];
 };
+
+const AI_CALL_COLUMNS =
+  "id, document_id, operation, provider, model, started_at, duration_ms, input_tokens, output_tokens, cost_usd, status, error, is_legacy";
+
+type AiCallRow = {
+  id: string;
+  document_id: string | null;
+  operation: AiCall["operation"];
+  provider: string;
+  model: string;
+  started_at: string;
+  duration_ms: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  // numeric comes back as a string or a number depending on the driver.
+  cost_usd: string | number | null;
+  status: AiCall["status"];
+  error: string | null;
+  is_legacy: boolean;
+};
+
+function toAiCall(row: AiCallRow): AiCall {
+  return {
+    id: row.id,
+    documentId: row.document_id,
+    operation: row.operation,
+    provider: row.provider,
+    model: row.model,
+    startedAt: new Date(row.started_at),
+    durationMs: row.duration_ms,
+    inputTokens: row.input_tokens,
+    outputTokens: row.output_tokens,
+    costUsd: row.cost_usd === null ? null : Number(row.cost_usd),
+    status: row.status,
+    error: row.error,
+    isLegacy: row.is_legacy,
+  };
+}
 
 function toSummary(row: DocumentRow): DocumentSummary {
   return {
@@ -132,6 +172,7 @@ export class SupabaseStore implements Store {
       ...toSummary(data),
       pageCount: data.page_count,
       extractedData: data.extracted_data ?? null,
+      completedAt: data.completed_at ? new Date(data.completed_at) : null,
     };
   }
 
@@ -399,6 +440,7 @@ export class SupabaseStore implements Store {
         open_flag_count: countOpenFlags(data),
         failure_reason: null,
         extracting_since: null,
+        completed_at: new Date().toISOString(),
       })
       .eq("id", id)
       .eq("status", "extracting");
@@ -460,6 +502,7 @@ export class SupabaseStore implements Store {
         failure_reason: null,
         attempt_count: 0,
         next_attempt_at: null,
+        completed_at: null,
       })
       .eq("id", id)
       .in("status", ["done", "failed"])
@@ -471,7 +514,7 @@ export class SupabaseStore implements Store {
   async resetFailedExtraction(id: string): Promise<boolean> {
     const { data, error } = await this.db
       .from("documents")
-      .update({ status: "queued", attempt_count: 0, failure_reason: null, next_attempt_at: null })
+      .update({ status: "queued", attempt_count: 0, failure_reason: null, next_attempt_at: null, completed_at: null })
       .eq("id", id)
       .eq("status", "failed")
       .select("id");
@@ -482,9 +525,53 @@ export class SupabaseStore implements Store {
   async failExtraction(id: string, reason: string): Promise<void> {
     const { error } = await this.db
       .from("documents")
-      .update({ status: "failed", failure_reason: reason, extracting_since: null })
+      .update({
+        status: "failed",
+        failure_reason: reason,
+        extracting_since: null,
+        completed_at: new Date().toISOString(),
+      })
       .eq("id", id)
       .eq("status", "extracting");
     if (error) throw error;
+  }
+
+  async recordAiCall(call: NewAiCall): Promise<void> {
+    const { error } = await this.db.from("ai_calls").insert({
+      document_id: call.documentId,
+      operation: call.operation,
+      provider: call.provider,
+      model: call.model,
+      started_at: call.startedAt.toISOString(),
+      duration_ms: call.durationMs,
+      input_tokens: call.inputTokens,
+      output_tokens: call.outputTokens,
+      cost_usd: call.costUsd,
+      status: call.status,
+      error: call.error,
+    });
+    if (error) throw error;
+  }
+
+  async listAiCalls(documentId: string): Promise<AiCall[]> {
+    const { data, error } = await this.db
+      .from("ai_calls")
+      .select(AI_CALL_COLUMNS)
+      .eq("document_id", documentId)
+      .order("started_at", { ascending: true })
+      .returns<AiCallRow[]>();
+    if (error) throw error;
+    return data.map(toAiCall);
+  }
+
+  async listAllAiCalls(): Promise<AiCall[]> {
+    const { data, error } = await this.db
+      .from("ai_calls")
+      .select(AI_CALL_COLUMNS)
+      .order("started_at", { ascending: false })
+      .limit(10000)
+      .returns<AiCallRow[]>();
+    if (error) throw error;
+    return data.map(toAiCall);
   }
 }

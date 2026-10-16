@@ -48,6 +48,8 @@ export type DocumentDetail = DocumentSummary & {
   extractedData: import("./extracted-data").ExtractedData | null;
   // Short-lived URL for viewing the original file.
   fileUrl: string | null;
+  // When the Extraction finished; null while it is running and for old Documents.
+  completedAt: Date | null;
 };
 
 // What the result list narrows down to; every part is optional and they combine.
