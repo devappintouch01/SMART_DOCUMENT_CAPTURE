@@ -203,7 +203,7 @@ export function ResultList({ documents, offset, aiInfo }: Props) {
             >
               {document.documentTypeId === null ? (
                 // No type, so nothing to export: no checkbox, but the column stays aligned.
-                <span className="mx-4 h-4 w-4 shrink-0" title={reason} aria-hidden="true" />
+                <span className="mx-3 h-4 w-4 shrink-0 sm:mx-4" title={reason} aria-hidden="true" />
               ) : (
                 <input
                   type="checkbox"
@@ -212,15 +212,15 @@ export function ResultList({ documents, offset, aiInfo }: Props) {
                   onChange={() => toggle(document)}
                   aria-label={`เลือก ${document.fileName}`}
                   title={reason}
-                  className="mx-4 h-4 w-4 shrink-0 accent-primary disabled:cursor-not-allowed disabled:opacity-40"
+                  className="mx-3 h-4 w-4 shrink-0 accent-primary disabled:cursor-not-allowed disabled:opacity-40 sm:mx-4"
                 />
               )}
-              <span className="w-8 shrink-0 text-right text-sm text-neutral-400 tabular-nums" aria-label="ลำดับ">
+              <span className="w-6 shrink-0 text-right text-sm text-neutral-400 tabular-nums sm:w-8" aria-label="ลำดับ">
                 {offset + index + 1}
               </span>
               <Link
                 href={`/documents/${document.id}`}
-                className="flex min-w-0 flex-1 items-center gap-4 py-3 pr-4 pl-4 text-sm hover:bg-neutral-50"
+                className="flex min-w-0 flex-1 items-center gap-3 py-3 pr-3 pl-3 text-sm hover:bg-neutral-50 sm:gap-4 sm:pr-4 sm:pl-4"
               >
                 {/* The preview opens only from the thumbnail, not from the whole row. */}
                 <span
@@ -233,31 +233,40 @@ export function ResultList({ documents, offset, aiInfo }: Props) {
                 >
                   <Thumbnail document={document} />
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{document.fileName}</p>
-                  <p className="text-neutral-500">{document.documentTypeName ?? "ยังไม่ระบุประเภท"}</p>
-                  {document.status === "failed" && document.failureReason && (
-                    <p className="truncate text-red-700">{document.failureReason}</p>
-                  )}
+                {/* Phone: the details sit in a stack beside the thumbnail, and the badges,
+                    cost and date wrap onto a line of their own under the name. From sm up
+                    it is one row. */}
+                <div className="min-w-0 flex-1 sm:flex sm:items-center sm:gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{document.fileName}</p>
+                    <p className="text-neutral-500">{document.documentTypeName ?? "ยังไม่ระบุประเภท"}</p>
+                    {document.status === "failed" && document.failureReason && (
+                      <p className="truncate text-red-700">{document.failureReason}</p>
+                    )}
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 sm:mt-0 sm:flex-nowrap">
+                    <StatusBadge status={document.status} reason={document.failureReason} />
+                    {document.openReviewFlagCount > 0 && (
+                      <span className="text-xs text-amber-700" title="ช่องที่ควรตรวจ">
+                        ⚠ {document.openReviewFlagCount}
+                      </span>
+                    )}
+                    {aiInfo && (
+                      <span
+                        className="min-w-0 text-xs text-neutral-600 sm:w-40 sm:shrink-0 sm:text-right"
+                        title="ค่าใช้จ่าย AI รวมของเอกสารนี้ และโมเดลที่ใช้อ่าน (superadmin)"
+                      >
+                        {formatBaht(aiInfo[document.id]?.costUsd ?? null)}
+                        <span className="ml-1.5 truncate text-neutral-400 sm:ml-0 sm:block">
+                          {aiInfo[document.id]?.model ?? "ไม่ทราบโมเดล"}
+                        </span>
+                      </span>
+                    )}
+                    <span className="text-xs text-neutral-500 sm:w-36 sm:text-right sm:text-sm">
+                      {uploadedAtFormat.format(document.uploadedAt)}
+                    </span>
+                  </div>
                 </div>
-                <StatusBadge status={document.status} reason={document.failureReason} />
-                {document.openReviewFlagCount > 0 && (
-                  <span className="text-xs text-amber-700" title="ช่องที่ควรตรวจ">
-                    ⚠ {document.openReviewFlagCount}
-                  </span>
-                )}
-                {aiInfo && (
-                  <span
-                    className="w-40 shrink-0 text-right text-xs text-neutral-600"
-                    title="ค่าใช้จ่าย AI รวมของเอกสารนี้ และโมเดลที่ใช้อ่าน (superadmin)"
-                  >
-                    {formatBaht(aiInfo[document.id]?.costUsd ?? null)}
-                    <span className="block truncate text-neutral-400">{aiInfo[document.id]?.model ?? "ไม่ทราบโมเดล"}</span>
-                  </span>
-                )}
-                <span className="hidden w-36 text-right text-neutral-500 sm:block">
-                  {uploadedAtFormat.format(document.uploadedAt)}
-                </span>
               </Link>
             </li>
           );
